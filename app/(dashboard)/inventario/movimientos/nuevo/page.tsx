@@ -1,0 +1,41 @@
+import Link from "next/link";
+import { requireRole } from "@/lib/auth";
+import { listWarehouses } from "@/lib/warehouses";
+import { listProductsLite } from "@/lib/products-lite";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Flash } from "@/components/flash";
+import { createMovementAction } from "../actions";
+import { MovementForm } from "./movement-form";
+
+type SP = Promise<{ error?: string }>;
+
+export default async function NuevoMovimientoPage({ searchParams }: { searchParams: SP }) {
+  await requireRole(["admin", "almacenero"]);
+  const [warehouses, products, sp] = await Promise.all([
+    listWarehouses(),
+    listProductsLite(),
+    searchParams,
+  ]);
+  return (
+    <div className="max-w-3xl space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Nuevo movimiento</h1>
+        <p className="text-sm text-muted-foreground">El trigger en BD actualiza el stock automáticamente al guardar.</p>
+      </div>
+      <Flash error={sp.error} />
+      <Card>
+        <CardContent className="pt-6">
+          <MovementForm
+            warehouses={warehouses.filter((w) => w.active).map((w) => ({ id: w.id, name: w.name }))}
+            products={products}
+            action={createMovementAction}
+          />
+        </CardContent>
+      </Card>
+      <div>
+        <Button asChild variant="ghost"><Link href="/inventario/movimientos">← Volver</Link></Button>
+      </div>
+    </div>
+  );
+}

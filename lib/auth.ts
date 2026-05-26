@@ -1,0 +1,133 @@
+import "server-only";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { scryptSync, timingSafeEqual } from "node:crypto";
+import { unstable_cache } from "next/cache";
+import { getSupabase } from "./supabase";
+import {
+  SESSION_COOKIE,
+  SESSION_DURATION_SECONDS,
+  createSessionToken,
+  getSessionSecret,
+  verifySessionToken,
+} from "./session";
+
+export type CurrentUser = {
+  id: string;
+  email: string;
+  fullName: string;
+  roles: string[];
+};
+
+function parseHash(raw: string): { salt: Buffer; hash: Buffer } | null {
+  const [saltHex, hashHex] = raw.split(":");
+  if (!saltHex || !hashHex) return null;
+  try {
+    const salt = Buffer.from(saltHex, "hex");
+    const hash = Buffer.from(hashHex, "hex");
+    if (salt.length === 0 || hash.length === 0) return null;
+    return { salt, hash };
+  } catch {
+    return null;
+  }
+}
+
+export function verifyPasswordAgainstHash(input: string, storedHash: string): boolean {
+  const stored = parseHash(storedHash);
+  if (!stored) return false;
+  const candidate = scryptSync(input, stored.salt, stored.hash.length);
+  if (candidate.length !== stored.hash.length) return false;
+  return timingSafeEqual(candidate, stored.hash);
+}
+
+const loadUser = unstable_cache(
+  async (userId: string): Promise<CurrentUser | null> => {
+    const sb = getSupabase();
+    const { data: u, error } = await sb
+      .from("app_users")
+      .select("id,email,full_name,active")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error || !u || !u.active) return null;
+    const { data: rs } = await sb
+      .from("user_roles")
+      .select("role_id")
+      .eq("user_id", userId);
+    return {
+      id: u.id,
+      email: u.email,
+      fullName: u.full_name,
+      roles: (rs ?? []).map((r) => r.role_id),
+    };
+  },
+  ["app_user_with_roles"],
+  { revalidate: 30, tags: ["app_users"] },
+);
+
+export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const jar = await cookies();
+  const token = jar.get(SESSION_COOKIE)?.value;
+  const session = await verifySessionToken(token, getSessionSecret());
+  if (!session) return null;
+  return loadUser(session.userId);
+}
+
+export async function requireUser(): Promise<CurrentUser> {
+  const u = await getCurrentUser();
+  if (!u) redirect("/login");
+  return u;
+}
+
+export async function requireRole(allowed: string[]): Promise<CurrentUser> {
+  const u = await requireUser();
+  if (!u.roles.some((r) => allowed.includes(r))) {
+    redirect("/?error=No+tienes+permiso");
+  }
+  return u;
+}
+
+export function hasRole(user: CurrentUser | null, allowed: string[]): boolean {
+  if (!user) return false;
+  return user.roles.some((r) => allowed.includes(r));
+}
+
+export async function signIn(email: string, password: string): Promise<CurrentUser> {
+  const sb = getSupabase();
+  const { data: u, error } = await sb
+    .from("app_users")
+    .select("id,email,password_hash,full_name,active")
+    .eq("email", email.toLowerCase())
+    .maybeSingle();
+  if (error || !u || !u.active) {
+    throw new Error("Credenciales inválidas.");
+  }
+  if (!verifyPasswordAgainstHash(password, u.password_hash)) {
+    throw new Error("Credenciales inválidas.");
+  }
+  const { data: rs } = await sb
+    .from("user_roles")
+    .select("role_id")
+    .eq("user_id", u.id);
+
+  const token = await createSessionToken(u.id, getSessionSecret());
+  const jar = await cookies();
+  jar.set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: SESSION_DURATION_SECONDS,
+  });
+
+  return {
+    id: u.id,
+    email: u.email,
+    fullName: u.full_name,
+    roles: (rs ?? []).map((r) => r.role_id),
+  };
+}
+
+export async function signOut(): Promise<void> {
+  const jar = await cookies();
+  jar.delete(SESSION_COOKIE);
+}
