@@ -330,6 +330,11 @@ export type Database = {
           confirmed_by: string | null;
           confirmed_at: string | null;
           movement_id: string | null;
+          payment_status: string;
+          payment_provider: string | null;
+          payment_ref: string | null;
+          amount_charged: number | null;
+          charge_currency: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -344,6 +349,11 @@ export type Database = {
           reference?: string;
           notes?: string;
           created_by?: string | null;
+          payment_status?: string;
+          payment_provider?: string | null;
+          payment_ref?: string | null;
+          amount_charged?: number | null;
+          charge_currency?: string | null;
         };
         Update: {
           customer_id?: string | null;
@@ -356,6 +366,47 @@ export type Database = {
           confirmed_by?: string | null;
           confirmed_at?: string | null;
           movement_id?: string | null;
+          payment_status?: string;
+          payment_provider?: string | null;
+          payment_ref?: string | null;
+          amount_charged?: number | null;
+          charge_currency?: string | null;
+        };
+        Relationships: [];
+      };
+      online_payments: {
+        Row: {
+          id: string;
+          order_id: string;
+          provider: string;
+          link_code: string | null;
+          oper_code: string | null;
+          amount_usd: number;
+          nonce: string;
+          status: string;
+          raw: unknown | null;
+          created_at: string;
+          paid_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          order_id: string;
+          provider?: string;
+          link_code?: string | null;
+          oper_code?: string | null;
+          amount_usd: number;
+          nonce: string;
+          status?: string;
+          raw?: unknown | null;
+          paid_at?: string | null;
+        };
+        Update: {
+          link_code?: string | null;
+          oper_code?: string | null;
+          status?: string;
+          raw?: unknown | null;
+          paid_at?: string | null;
         };
         Relationships: [];
       };
@@ -605,6 +656,58 @@ export type Database = {
           product_id: string;
           quantity: number;
           unit_cost?: number | null;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      inventory_lots: {
+        Row: {
+          id: string;
+          product_id: string;
+          warehouse_id: string;
+          unit_cost: number;
+          qty_received: number;
+          qty_remaining: number;
+          source_type: string;
+          source_id: string | null;
+          movement_id: string | null;
+          received_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          warehouse_id: string;
+          unit_cost?: number;
+          qty_received: number;
+          qty_remaining: number;
+          source_type?: string;
+          source_id?: string | null;
+          movement_id?: string | null;
+          received_at?: string;
+        };
+        Update: { unit_cost?: number; qty_remaining?: number };
+        Relationships: [];
+      };
+      inventory_lot_consumptions: {
+        Row: {
+          id: string;
+          lot_id: string;
+          movement_id: string;
+          product_id: string;
+          warehouse_id: string;
+          quantity: number;
+          unit_cost: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          lot_id: string;
+          movement_id: string;
+          product_id: string;
+          warehouse_id: string;
+          quantity: number;
+          unit_cost: number;
         };
         Update: never;
         Relationships: [];

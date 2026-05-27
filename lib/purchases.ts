@@ -2,6 +2,7 @@ import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { createMovement } from "./inventory";
+import { generatePurchaseEntry } from "./auto-accounting";
 import type { PurchaseOrderStatus } from "./supabase-types";
 
 const TAG = "purchases";
@@ -272,6 +273,16 @@ export async function receivePurchaseOrder(id: string, userId: string): Promise<
     })
     .eq("id", id);
   if (error) throw error;
+
+  // Asiento contable automático (borrador): Inventario / Cuentas por pagar.
+  await generatePurchaseEntry({
+    purchaseId: po.id,
+    code: po.code,
+    supplierName: po.supplier_name,
+    total: po.total_amount,
+    date: new Date().toISOString().slice(0, 10),
+    userId,
+  });
   bust();
 }
 

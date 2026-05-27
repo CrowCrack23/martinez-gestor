@@ -2,6 +2,7 @@ import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { createMovement } from "./inventory";
+import { movementCost } from "./costing";
 import type { Database, ProductionStatus } from "./supabase-types";
 
 const TAG = "production";
@@ -169,7 +170,14 @@ export async function produceOrder(id: string, userId: string): Promise<void> {
 
   const builds = Number(po.quantity);
 
-  // Salida de insumos
+  // Validar la cantidad producida antes de tocar inventario, para no dejar
+  // movimientos/lotes a medio aplicar.
+  const producedQty = Math.floor(Number(bom.yield) * builds);
+  if (producedQty <= 0) {
+    throw new Error("La cantidad producida resulta en 0 unidades.");
+  }
+
+  // Salida de insumos (consume lotes FIFO y registra su costo real)
   const outLines = bom.components.map((c) => ({
     product_id: c.component_product_id,
     quantity: Math.ceil(Number(c.quantity_per_unit) * builds),
@@ -185,12 +193,9 @@ export async function produceOrder(id: string, userId: string): Promise<void> {
     lines: outLines,
   });
 
-  // Entrada de producto terminado
-  const producedQty = Math.floor(Number(bom.yield) * builds);
-  if (producedQty <= 0) {
-    await sb.from("inventory_movements").delete().eq("id", movOut);
-    throw new Error("La cantidad producida resulta en 0 unidades.");
-  }
+  // El costo del producto terminado = costo real de los insumos / unidades producidas.
+  const inputCost = await movementCost(movOut);
+  const finishedUnitCost = producedQty > 0 ? inputCost / producedQty : 0;
   const movIn = await createMovement({
     type: "entrada",
     warehouse_from: null,
@@ -199,7 +204,7 @@ export async function produceOrder(id: string, userId: string): Promise<void> {
     reference_id: po.id,
     user_id: userId,
     notes: `Producción ${po.code} — ${bom.name}`,
-    lines: [{ product_id: bom.product_id, quantity: producedQty }],
+    lines: [{ product_id: bom.product_id, quantity: producedQty, unit_cost: finishedUnitCost }],
   });
 
   const { error } = await sb.from("production_orders").update({

@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { listStock } from "@/lib/inventory";
+import { stockValuation } from "@/lib/costing";
 import { listWarehouses } from "@/lib/warehouses";
 import { listStoresLite } from "@/lib/stores-lite";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ArrowLeftRight, Plus } from "lucide-react";
-import { formatNumber } from "@/lib/format";
+import { AlertTriangle, ArrowLeftRight, Layers, Plus } from "lucide-react";
+import { formatNumber, formatPrice } from "@/lib/format";
 import { Flash } from "@/components/flash";
 
 type SP = Promise<{ warehouse?: string; store?: string; low?: string; success?: string; error?: string }>;
@@ -19,13 +20,18 @@ export default async function InventarioPage({ searchParams }: { searchParams: S
     store: sp.store || undefined,
     lowOnly: sp.low === "1",
   };
-  const [rows, warehouses, stores] = await Promise.all([
+  const [rows, warehouses, stores, valuation] = await Promise.all([
     listStock(filter),
     listWarehouses(),
     listStoresLite(),
+    stockValuation(),
   ]);
 
   const lowCount = rows.filter((r) => r.quantity <= r.min_stock).length;
+  const totalValue = rows.reduce(
+    (s, r) => s + (valuation[`${r.product_id}::${r.warehouse_id}`]?.value ?? 0),
+    0,
+  );
 
   return (
     <div className="space-y-6">
@@ -35,6 +41,9 @@ export default async function InventarioPage({ searchParams }: { searchParams: S
           <p className="text-sm text-muted-foreground">Stock por producto y almacén.</p>
         </div>
         <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/inventario/lotes"><Layers className="size-4" />Lotes y costos</Link>
+          </Button>
           <Button asChild variant="outline">
             <Link href="/inventario/movimientos"><ArrowLeftRight className="size-4" />Ver movimientos</Link>
           </Button>
@@ -88,15 +97,17 @@ export default async function InventarioPage({ searchParams }: { searchParams: S
               <th className="px-4 py-3 font-medium">Almacén</th>
               <th className="px-4 py-3 font-medium text-right">Cantidad</th>
               <th className="px-4 py-3 font-medium text-right">Mín</th>
-              <th className="px-4 py-3 font-medium text-right">Máx</th>
+              <th className="px-4 py-3 font-medium text-right">Costo prom.</th>
+              <th className="px-4 py-3 font-medium text-right">Valor</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Sin resultados.</td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Sin resultados.</td></tr>
             )}
             {rows.map((r) => {
               const low = r.quantity <= r.min_stock;
+              const val = valuation[`${r.product_id}::${r.warehouse_id}`];
               return (
                 <tr key={`${r.product_id}-${r.warehouse_id}`} className="border-b last:border-b-0 hover:bg-muted/30">
                   <td className="px-4 py-3 font-medium">{r.product_name}</td>
@@ -107,11 +118,20 @@ export default async function InventarioPage({ searchParams }: { searchParams: S
                     {formatNumber(r.quantity)}
                   </td>
                   <td className="px-4 py-3 text-right text-muted-foreground font-mono">{formatNumber(r.min_stock)}</td>
-                  <td className="px-4 py-3 text-right text-muted-foreground font-mono">{r.max_stock != null ? formatNumber(r.max_stock) : "—"}</td>
+                  <td className="px-4 py-3 text-right text-muted-foreground font-mono">{val ? formatPrice(val.avg_cost) : "—"}</td>
+                  <td className="px-4 py-3 text-right font-mono">{val ? formatPrice(val.value) : "—"}</td>
                 </tr>
               );
             })}
           </tbody>
+          {rows.length > 0 && (
+            <tfoot className="border-t">
+              <tr>
+                <td colSpan={7} className="px-4 py-3 text-right text-sm text-muted-foreground">Valor total del inventario listado</td>
+                <td className="px-4 py-3 text-right font-mono font-semibold">{formatPrice(totalValue)}</td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </Card>
     </div>

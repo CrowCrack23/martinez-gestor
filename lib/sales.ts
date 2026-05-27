@@ -2,6 +2,7 @@ import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { createMovement } from "./inventory";
+import { generateSaleEntry } from "./auto-accounting";
 import type { OrderOrigin, OrderStatus, PaymentMethod } from "./supabase-types";
 
 const TAG = "sales";
@@ -24,6 +25,7 @@ export type OrderSummary = {
   payment_method: PaymentMethod;
   reference: string;
   total_amount: number;
+  payment_status: string;
   line_count: number;
   created_at: string;
   confirmed_at: string | null;
@@ -39,6 +41,7 @@ type OrderRawRow = {
   payment_method: PaymentMethod;
   reference: string;
   total_amount: number;
+  payment_status: string;
   created_at: string;
   confirmed_at: string | null;
   customers: { name: string } | null;
@@ -52,7 +55,7 @@ export const listOrders = unstable_cache(
     let q = sb
       .from("orders")
       .select(
-        "id,code,status,origin,customer_id,warehouse_id,payment_method,reference,total_amount,created_at,confirmed_at,customers(name),warehouses!inner(name),order_lines(id)",
+        "id,code,status,origin,customer_id,warehouse_id,payment_method,reference,total_amount,payment_status,created_at,confirmed_at,customers(name),warehouses!inner(name),order_lines(id)",
       )
       .order("created_at", { ascending: false });
     if (filter?.status) q = q.eq("status", filter.status);
@@ -72,6 +75,7 @@ export const listOrders = unstable_cache(
       payment_method: r.payment_method,
       reference: r.reference,
       total_amount: Number(r.total_amount),
+      payment_status: r.payment_status ?? "no_aplica",
       line_count: (r.order_lines ?? []).length,
       created_at: r.created_at,
       confirmed_at: r.confirmed_at,
@@ -104,6 +108,9 @@ export type OrderDetail = {
   reference: string;
   notes: string;
   total_amount: number;
+  payment_status: string;
+  amount_charged: number | null;
+  charge_currency: string | null;
   created_at: string;
   confirmed_at: string | null;
   movement_id: string | null;
@@ -115,7 +122,7 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
   const { data, error } = await sb
     .from("orders")
     .select(
-      "id,code,status,origin,customer_id,warehouse_id,payment_method,reference,notes,total_amount,created_at,confirmed_at,movement_id,customers(name),warehouses!inner(name)",
+      "id,code,status,origin,customer_id,warehouse_id,payment_method,reference,notes,total_amount,payment_status,amount_charged,charge_currency,created_at,confirmed_at,movement_id,customers(name),warehouses!inner(name)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -125,6 +132,7 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
     id: string; code: string; status: OrderStatus; origin: OrderOrigin;
     customer_id: string | null; warehouse_id: string; payment_method: PaymentMethod;
     reference: string; notes: string; total_amount: number;
+    payment_status: string; amount_charged: number | null; charge_currency: string | null;
     created_at: string; confirmed_at: string | null; movement_id: string | null;
     customers: { name: string } | null; warehouses: { name: string } | null;
   };
@@ -162,6 +170,9 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
     reference: d.reference,
     notes: d.notes,
     total_amount: Number(d.total_amount),
+    payment_status: d.payment_status ?? "no_aplica",
+    amount_charged: d.amount_charged != null ? Number(d.amount_charged) : null,
+    charge_currency: d.charge_currency,
     created_at: d.created_at,
     confirmed_at: d.confirmed_at,
     movement_id: d.movement_id,
@@ -261,7 +272,8 @@ export async function confirmOrder(id: string, userId: string): Promise<void> {
     reference_id: o.id,
     user_id: userId,
     notes: `Venta ${o.code}${o.reference ? ` — ref. ${o.reference}` : ""}`,
-    lines: o.lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity, unit_cost: l.unit_price })),
+    // Sin unit_cost: el costo real de la salida lo calcula el costeo FIFO por lotes.
+    lines: o.lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity })),
   });
 
   const { error } = await sb
@@ -274,6 +286,19 @@ export async function confirmOrder(id: string, userId: string): Promise<void> {
     })
     .eq("id", id);
   if (error) throw error;
+
+  // Asiento contable automático (borrador): Cobro/CxC / Ventas + Costo de ventas / Inventario.
+  await generateSaleEntry({
+    orderId: o.id,
+    code: o.code,
+    customerName: o.customer_name,
+    total: o.total_amount,
+    paymentMethod: o.payment_method,
+    origin: o.origin,
+    movementId,
+    date: new Date().toISOString().slice(0, 10),
+    userId,
+  });
   bust();
 }
 

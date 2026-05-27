@@ -1,6 +1,7 @@
 import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
+import { generateRemittanceEntry } from "./auto-accounting";
 import type { Database, RemittanceStatus, RemittancePayoutMethod } from "./supabase-types";
 
 const TAG = "remittances";
@@ -77,6 +78,16 @@ export async function payRemittance(id: string, userId: string): Promise<void> {
     status: "entregada", paid_by: userId, paid_at: new Date().toISOString(),
   }).eq("id", id);
   if (error) throw error;
+
+  // Asiento contable automático (borrador): Caja CUP / Comisiones remesas (en CUP).
+  await generateRemittanceEntry({
+    remittanceId: r.id,
+    code: r.code,
+    commissionUsd: r.commission_usd,
+    exchangeRate: r.exchange_rate,
+    date: new Date().toISOString().slice(0, 10),
+    userId,
+  });
   bust();
 }
 

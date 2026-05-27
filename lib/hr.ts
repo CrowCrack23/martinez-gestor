@@ -1,6 +1,7 @@
 import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
+import { generatePayrollEntry } from "./auto-accounting";
 import type { Database, PayrollStatus } from "./supabase-types";
 
 const TAG_POS = "positions";
@@ -247,10 +248,39 @@ export async function updatePayrollItem(
 
 export async function closePayrollRun(id: string, userId: string | null) {
   const sb = getSupabase();
+  const { data: run, error: rErr } = await sb.from("payroll_runs")
+    .select("status, period_start, period_end").eq("id", id).maybeSingle();
+  if (rErr) throw rErr;
+  if (!run) throw new Error("Nómina no encontrada.");
+  if (run.status === "cerrada") throw new Error("La nómina ya está cerrada.");
+
   const { error } = await sb.from("payroll_runs")
     .update({ status: "cerrada", closed_by: userId, closed_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw error;
+
+  // Asiento contable automático (borrador): Salarios / Salarios por pagar + Impuestos por pagar.
+  const { data: items, error: iErr } = await sb.from("payroll_items")
+    .select("gross, deductions, net").eq("payroll_run_id", id);
+  if (iErr) throw iErr;
+  const totals = (items ?? []).reduce(
+    (acc, it) => ({
+      gross: acc.gross + Number(it.gross),
+      deductions: acc.deductions + Number(it.deductions),
+      net: acc.net + Number(it.net),
+    }),
+    { gross: 0, deductions: 0, net: 0 },
+  );
+  await generatePayrollEntry({
+    runId: id,
+    periodStart: run.period_start,
+    periodEnd: run.period_end,
+    grossTotal: totals.gross,
+    deductionsTotal: totals.deductions,
+    netTotal: totals.net,
+    date: new Date().toISOString().slice(0, 10),
+    userId,
+  });
   bust(TAG_PAY);
 }
 

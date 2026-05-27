@@ -68,9 +68,21 @@ export default async function VentasPage({ searchParams }: { searchParams: SP })
                 <td className="px-4 py-3 text-muted-foreground">{ORDER_ORIGIN_LABEL[o.origin]}</td>
                 <td className="px-4 py-3 text-muted-foreground">{o.warehouse_name}</td>
                 <td className="px-4 py-3">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${ORDER_STATUS_BADGE[o.status]}`}>
-                    {ORDER_STATUS_LABEL[o.status]}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${ORDER_STATUS_BADGE[o.status]}`}>
+                      {ORDER_STATUS_LABEL[o.status]}
+                    </span>
+                    {o.payment_status === "pagado" && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-success/10 text-success">
+                        Pagado online
+                      </span>
+                    )}
+                    {o.payment_status === "pendiente" && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-warning/10 text-warning-foreground">
+                        Pago pendiente
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-right font-mono">{formatPrice(o.total_amount)}</td>
                 <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{formatDateTime(o.created_at)}</td>

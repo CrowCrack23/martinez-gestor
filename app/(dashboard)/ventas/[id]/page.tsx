@@ -46,6 +46,12 @@ export default async function VentaDetallePage({ params, searchParams }: { param
               <div><div className="text-muted-foreground text-xs">Almacén origen</div><div>{o.warehouse_name}</div></div>
               <div><div className="text-muted-foreground text-xs">Origen</div><div>{ORDER_ORIGIN_LABEL[o.origin]}</div></div>
               <div><div className="text-muted-foreground text-xs">Pago</div><div>{PAYMENT_METHOD_LABEL[o.payment_method]}</div></div>
+              {o.amount_charged != null && (
+                <div>
+                  <div className="text-muted-foreground text-xs">Cobrado online</div>
+                  <div className="font-mono">USD {o.amount_charged.toFixed(2)}{o.charge_currency === "CUP" ? " (registrado en CUP)" : ""}</div>
+                </div>
+              )}
               <div><div className="text-muted-foreground text-xs">Ref. externa</div><div>{o.reference || "—"}</div></div>
               <div><div className="text-muted-foreground text-xs">Creada</div><div>{formatDateTime(o.created_at)}</div></div>
               {o.confirmed_at && (
@@ -177,15 +183,21 @@ export default async function VentaDetallePage({ params, searchParams }: { param
   );
 }
 
-function Header({ o }: { o: { code: string; status: "borrador" | "confirmada" | "cancelada"; total_amount: number } }) {
+function Header({ o }: { o: { code: string; status: "borrador" | "confirmada" | "cancelada"; total_amount: number; payment_status: string } }) {
   return (
     <div className="flex items-center justify-between gap-4">
       <div>
         <h1 className="text-2xl font-semibold font-mono">{o.code}</h1>
-        <div className="flex items-center gap-2 mt-1">
+        <div className="flex flex-wrap items-center gap-2 mt-1">
           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${ORDER_STATUS_BADGE[o.status]}`}>
             {ORDER_STATUS_LABEL[o.status]}
           </span>
+          {o.payment_status === "pagado" && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-success/10 text-success">Pagado online</span>
+          )}
+          {o.payment_status === "pendiente" && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-warning/10 text-warning-foreground">Pago pendiente</span>
+          )}
           <span className="text-sm text-muted-foreground">Total <span className="font-mono">{formatPrice(o.total_amount)}</span></span>
         </div>
       </div>

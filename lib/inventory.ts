@@ -1,6 +1,7 @@
 import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
+import { createLot, consumeFIFO, averageCost, bustCosting } from "./costing";
 import type { InventoryMovementType } from "./supabase-types";
 
 const TAG = "inventory";
@@ -8,6 +9,7 @@ const TAG = "inventory";
 function bust() {
   revalidateTag(TAG, "max");
   revalidateTag("warehouses", "max");
+  bustCosting();
 }
 
 export type StockRow = {
@@ -124,6 +126,70 @@ export async function createMovement(input: {
   if (lErr) {
     await sb.from("inventory_movements").delete().eq("id", mov.id);
     throw lErr;
+  }
+
+  // Costeo por lotes. El trigger de BD ya aplicó las cantidades a stock_locations;
+  // aquí mantenemos el ledger de lotes en sincronía y registramos el costo real
+  // de las salidas (FIFO). source_type del lote = reference_type del movimiento.
+  const source = input.reference_type ?? "manual";
+  for (const l of input.lines) {
+    if (input.type === "entrada") {
+      await createLot({
+        product_id: l.product_id,
+        warehouse_id: input.warehouse_to!,
+        unit_cost: l.unit_cost ?? 0,
+        quantity: l.quantity,
+        source_type: source,
+        source_id: input.reference_id ?? null,
+        movement_id: mov.id,
+      });
+    } else if (input.type === "salida" || input.type === "merma") {
+      await consumeFIFO({
+        product_id: l.product_id,
+        warehouse_id: input.warehouse_from!,
+        quantity: l.quantity,
+        movement_id: mov.id,
+      });
+    } else if (input.type === "transferencia") {
+      // Consumir del origen al costo FIFO y recrear el lote en destino al mismo
+      // costo promedio, para no perder la valuación al mover stock.
+      const { cost } = await consumeFIFO({
+        product_id: l.product_id,
+        warehouse_id: input.warehouse_from!,
+        quantity: l.quantity,
+        movement_id: mov.id,
+      });
+      await createLot({
+        product_id: l.product_id,
+        warehouse_id: input.warehouse_to!,
+        unit_cost: l.quantity > 0 ? cost / l.quantity : 0,
+        quantity: l.quantity,
+        source_type: "transferencia",
+        source_id: input.reference_id ?? null,
+        movement_id: mov.id,
+      });
+    } else if (input.type === "ajuste") {
+      // La línea trae el delta con signo: positivo crea lote, negativo consume.
+      if (l.quantity > 0) {
+        const cost = l.unit_cost ?? (await averageCost(l.product_id, input.warehouse_to!));
+        await createLot({
+          product_id: l.product_id,
+          warehouse_id: input.warehouse_to!,
+          unit_cost: cost,
+          quantity: l.quantity,
+          source_type: "ajuste",
+          source_id: input.reference_id ?? null,
+          movement_id: mov.id,
+        });
+      } else if (l.quantity < 0) {
+        await consumeFIFO({
+          product_id: l.product_id,
+          warehouse_id: input.warehouse_to!,
+          quantity: -l.quantity,
+          movement_id: mov.id,
+        });
+      }
+    }
   }
 
   bust();
