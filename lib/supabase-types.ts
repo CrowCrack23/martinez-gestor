@@ -78,11 +78,39 @@ export type Database = {
           shipping_time: string | null;
           featured: boolean;
           is_new: boolean;
+          online_visible: boolean;
           created_at: string;
           updated_at: string;
         };
-        Insert: never;
-        Update: { stock?: number };
+        Insert: {
+          id: string;
+          name: string;
+          description?: string;
+          price: number;
+          old_price?: number | null;
+          image?: string;
+          stock?: number;
+          category: string;
+          store: string;
+          shipping_time?: string | null;
+          featured?: boolean;
+          is_new?: boolean;
+          online_visible?: boolean;
+        };
+        Update: {
+          name?: string;
+          description?: string;
+          price?: number;
+          old_price?: number | null;
+          image?: string;
+          stock?: number;
+          category?: string;
+          store?: string;
+          shipping_time?: string | null;
+          featured?: boolean;
+          is_new?: boolean;
+          online_visible?: boolean;
+        };
         Relationships: [];
       };
 

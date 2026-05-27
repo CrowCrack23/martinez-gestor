@@ -34,6 +34,7 @@ ERP en `D:\Work\Selfish\martinez-gestor` para una empresa cubana del cliente Mar
 | 0011 | `0011_accounting.sql` | `accounts` (con plan seedeado), `journal_entries`, `journal_lines` |
 | 0012 | `0012_inventory_costing.sql` | `inventory_lots`, `inventory_lot_consumptions` + lotes de apertura a costo 0. **PENDIENTE DE APLICAR en Supabase.** |
 | 0013 | `0013_online_orders.sql` | columnas de pago en `orders` + tabla `online_payments` (pasarela). **PENDIENTE DE APLICAR.** Habilita el pago con tarjeta de la tienda `martinez-global`. |
+| 0014 | `0014_products_online_flag.sql` | columna `online_visible` en `products`. **PENDIENTE DE APLICAR — antes de correr la tienda**, o `listOnlineProducts` falla. Habilita el CRUD de productos del ERP (`/productos`) y el toggle "se vende online". |
 
 **Numeración continúa desde martinez-global** (0001..0004 son de allí).
 
@@ -47,6 +48,7 @@ ERP en `D:\Work\Selfish\martinez-gestor` para una empresa cubana del cliente Mar
 | `/almacenes` `/almacenes/nuevo` `/almacenes/[id]` | admin, almacenero | CRUD almacenes |
 | `/inventario` | admin, almacenero, vendedor | Tabla stock con filtros + alerta low-stock |
 | `/inventario/movimientos` `/inventario/movimientos/nuevo` | admin, almacenero | Historial + registrar movimientos |
+| `/productos` `/productos/nuevo` `/productos/[id]` | admin, almacenero | CRUD del catálogo (tabla compartida `products`) + flag "se vende online" + tienda. El stock va por Inventario. |
 | `/proveedores` `/proveedores/nuevo` `/proveedores/[id]` | admin, almacenero, contador | CRUD proveedores |
 | `/compras` `/compras/nueva` `/compras/[id]` | admin, almacenero, contador | OC con borrador→recibida (genera entrada) |
 | `/clientes` `/clientes/nuevo` `/clientes/[id]` | admin, vendedor, contador | CRUD clientes |

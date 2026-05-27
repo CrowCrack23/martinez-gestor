@@ -6,6 +6,7 @@ import {
   Users,
   Warehouse,
   Boxes,
+  Package,
   ArrowLeftRight,
   Layers,
   Truck,
@@ -27,6 +28,7 @@ type NavItem = { href: string; label: string; icon: React.ComponentType<{ classN
 
 const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/productos", label: "Productos", icon: Package, roles: ["admin", "almacenero"] },
   { href: "/inventario", label: "Inventario", icon: Boxes, roles: ["admin", "almacenero", "vendedor"] },
   { href: "/inventario/movimientos", label: "Movimientos", icon: ArrowLeftRight, roles: ["admin", "almacenero"] },
   { href: "/inventario/lotes", label: "Lotes y costos", icon: Layers, roles: ["admin", "almacenero", "contador"] },
