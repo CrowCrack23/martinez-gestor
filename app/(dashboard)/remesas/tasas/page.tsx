@@ -45,7 +45,8 @@ export default async function TasasPage({ searchParams }: { searchParams: SP }) 
         </CardContent>
       </Card>
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Fecha</th>
@@ -76,6 +77,7 @@ export default async function TasasPage({ searchParams }: { searchParams: SP }) 
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

@@ -11,6 +11,7 @@ import {
   getSessionSecret,
   verifySessionToken,
 } from "./session";
+import { roleListHasPermission, type Permission } from "./permissions";
 
 export type CurrentUser = {
   id: string;
@@ -89,6 +90,21 @@ export async function requireRole(allowed: string[]): Promise<CurrentUser> {
 export function hasRole(user: CurrentUser | null, allowed: string[]): boolean {
   if (!user) return false;
   return user.roles.some((r) => allowed.includes(r));
+}
+
+/** ¿El usuario tiene acceso al módulo (permiso) indicado? */
+export function hasPermission(user: CurrentUser | null, perm: Permission): boolean {
+  if (!user) return false;
+  return roleListHasPermission(user.roles, perm);
+}
+
+/** Exige sesión + permiso de módulo; si falta, manda a /sin-acceso. */
+export async function requirePermission(perm: Permission): Promise<CurrentUser> {
+  const u = await requireUser();
+  if (!roleListHasPermission(u.roles, perm)) {
+    redirect("/sin-acceso");
+  }
+  return u;
 }
 
 export async function signIn(email: string, password: string): Promise<CurrentUser> {

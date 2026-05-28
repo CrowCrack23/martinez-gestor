@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole, hasRole } from "@/lib/auth";
+import { hasRole, requirePermission } from "@/lib/auth";
 import { getRemittance, REM_STATUS_BADGE, REM_STATUS_LABEL, REM_PAYOUT_LABEL } from "@/lib/remittances";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ const cupFmt = new Intl.NumberFormat("es-CU", { style: "currency", currency: "CU
 const usdFmt = new Intl.NumberFormat("es-CU", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 
 export default async function RemesaDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  const user = await requireRole(["admin", "vendedor", "contador"]);
+  const user = await requirePermission("remesas");
   const { id } = await params;
   const [r, sp] = await Promise.all([getRemittance(id), searchParams]);
   if (!r) notFound();
@@ -51,7 +51,7 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
       {!editable ? (
         <Card>
           <CardContent className="pt-6 space-y-3 text-sm">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Remitente" value={`${r.sender_name}${r.sender_phone ? ` · ${r.sender_phone}` : ""}`} />
               <Field label="Beneficiario" value={`${r.beneficiary_name}${r.beneficiary_phone ? ` · ${r.beneficiary_phone}` : ""}`} />
               <Field label="Cédula" value={r.beneficiary_doc || "—"} />
@@ -70,14 +70,14 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
             <form action={update} className="space-y-5">
               <div>
                 <div className="text-sm font-medium mb-2">Remitente</div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2"><Label htmlFor="sender_name">Nombre *</Label><Input id="sender_name" name="sender_name" required defaultValue={r.sender_name} /></div>
                   <div className="space-y-2"><Label htmlFor="sender_phone">Teléfono</Label><Input id="sender_phone" name="sender_phone" defaultValue={r.sender_phone} /></div>
                 </div>
               </div>
               <div>
                 <div className="text-sm font-medium mb-2">Beneficiario</div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2"><Label htmlFor="beneficiary_name">Nombre *</Label><Input id="beneficiary_name" name="beneficiary_name" required defaultValue={r.beneficiary_name} /></div>
                   <div className="space-y-2"><Label htmlFor="beneficiary_phone">Teléfono</Label><Input id="beneficiary_phone" name="beneficiary_phone" defaultValue={r.beneficiary_phone} /></div>
                   <div className="space-y-2"><Label htmlFor="beneficiary_doc">Cédula / CI</Label><Input id="beneficiary_doc" name="beneficiary_doc" defaultValue={r.beneficiary_doc} /></div>
@@ -89,7 +89,7 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
                 </div>
                 <div className="space-y-2 mt-3"><Label htmlFor="beneficiary_address">Dirección</Label><Textarea id="beneficiary_address" name="beneficiary_address" rows={2} defaultValue={r.beneficiary_address} /></div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-2"><Label htmlFor="amount_usd">USD *</Label><Input id="amount_usd" name="amount_usd" type="number" step="0.01" min={0.01} required defaultValue={String(r.amount_usd)} /></div>
                 <div className="space-y-2"><Label htmlFor="exchange_rate">Tasa *</Label><Input id="exchange_rate" name="exchange_rate" type="number" step="0.0001" min={0.0001} required defaultValue={String(r.exchange_rate)} /></div>
                 <div className="space-y-2"><Label htmlFor="commission_usd">Comisión USD</Label><Input id="commission_usd" name="commission_usd" type="number" step="0.01" min={0} defaultValue={String(r.commission_usd)} /></div>

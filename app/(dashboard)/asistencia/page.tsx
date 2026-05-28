@@ -1,4 +1,4 @@
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listAttendance, listEmployees } from "@/lib/hr";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,7 +15,7 @@ function todayISO(): string {
 }
 
 export default async function AsistenciaPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "rrhh"]);
+  await requirePermission("asistencia");
   const sp = await searchParams;
   const day = sp.day || todayISO();
   const [emps, att] = await Promise.all([listEmployees(), listAttendance(day)]);

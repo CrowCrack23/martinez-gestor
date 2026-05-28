@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listPayrollRuns, PAYROLL_STATUS_LABEL } from "@/lib/hr";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Flash } from "@/components/flash";
 type SP = Promise<{ success?: string; error?: string }>;
 
 export default async function NominaPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "rrhh", "contador"]);
+  await requirePermission("nomina");
   const [runs, sp] = await Promise.all([listPayrollRuns(), searchParams]);
   return (
     <div className="space-y-6">
@@ -22,7 +22,8 @@ export default async function NominaPage({ searchParams }: { searchParams: SP })
       </div>
       <Flash success={sp.success} error={sp.error} />
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Período</th>
@@ -55,6 +56,7 @@ export default async function NominaPage({ searchParams }: { searchParams: SP })
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

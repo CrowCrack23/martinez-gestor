@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole, hasRole } from "@/lib/auth";
+import { hasRole, requirePermission } from "@/lib/auth";
 import { getWarehouse, WAREHOUSE_TYPE_LABEL } from "@/lib/warehouses";
 import { listStoresLite } from "@/lib/stores-lite";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ error?: string }>;
 
 export default async function EditarAlmacenPage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  const user = await requireRole(["admin", "almacenero"]);
+  const user = await requirePermission("almacenes");
   const { id } = await params;
   const [warehouse, stores, sp] = await Promise.all([getWarehouse(id), listStoresLite(), searchParams]);
   if (!warehouse) notFound();
@@ -35,7 +35,7 @@ export default async function EditarAlmacenPage({ params, searchParams }: { para
       <Card>
         <CardContent className="pt-6">
           <form action={updateAction} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="code">Código</Label>
                 <Input id="code" name="code" required defaultValue={warehouse.code} />

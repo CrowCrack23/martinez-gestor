@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { BookOpen, FileText, Scale } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function ContabilidadIndex() {
-  await requireRole(["admin", "contador"]);
+  await requirePermission("contabilidad");
   return (
     <div className="space-y-6 max-w-3xl">
       <div>

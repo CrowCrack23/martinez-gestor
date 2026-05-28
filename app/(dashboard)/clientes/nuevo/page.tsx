@@ -24,7 +24,7 @@ export default async function NuevoClientePage({ searchParams }: { searchParams:
               <Label htmlFor="name">Nombre *</Label>
               <Input id="name" name="name" required />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2"><Label htmlFor="phone">Teléfono</Label><Input id="phone" name="phone" /></div>
               <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" /></div>
             </div>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole, hasRole } from "@/lib/auth";
+import { hasRole, requirePermission } from "@/lib/auth";
 import { getEmployee, listPositions } from "@/lib/hr";
 import { listWarehouses } from "@/lib/warehouses";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ error?: string; success?: string }>;
 
 export default async function EditarEmpleadoPage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  const user = await requireRole(["admin", "rrhh"]);
+  const user = await requirePermission("empleados");
   const { id } = await params;
   const [emp, positions, warehouses, sp] = await Promise.all([
     getEmployee(id), listPositions(), listWarehouses(), searchParams,
@@ -33,19 +33,19 @@ export default async function EditarEmpleadoPage({ params, searchParams }: { par
       <Card>
         <CardContent className="pt-6">
           <form action={update} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2"><Label htmlFor="code">Código *</Label><Input id="code" name="code" required defaultValue={emp.code} /></div>
               <div className="space-y-2"><Label htmlFor="document_id">Cédula / DNI</Label><Input id="document_id" name="document_id" defaultValue={emp.document_id} /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2"><Label htmlFor="first_name">Nombre *</Label><Input id="first_name" name="first_name" required defaultValue={emp.first_name} /></div>
               <div className="space-y-2"><Label htmlFor="last_name">Apellido</Label><Input id="last_name" name="last_name" defaultValue={emp.last_name} /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2"><Label htmlFor="phone">Teléfono</Label><Input id="phone" name="phone" defaultValue={emp.phone} /></div>
               <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" defaultValue={emp.email} /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="position_id">Posición</Label>
                 <Select id="position_id" name="position_id" defaultValue={emp.position_id ?? ""}>
@@ -61,7 +61,7 @@ export default async function EditarEmpleadoPage({ params, searchParams }: { par
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2"><Label htmlFor="hire_date">Ingreso</Label><Input id="hire_date" name="hire_date" type="date" defaultValue={emp.hire_date ?? ""} /></div>
               <div className="space-y-2"><Label htmlFor="termination_date">Baja</Label><Input id="termination_date" name="termination_date" type="date" defaultValue={emp.termination_date ?? ""} /></div>
               <div className="space-y-2"><Label htmlFor="monthly_salary">Salario</Label><Input id="monthly_salary" name="monthly_salary" type="number" step="0.01" min={0} defaultValue={String(emp.monthly_salary)} /></div>

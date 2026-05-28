@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Pencil, Plus } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listUsers } from "@/lib/users";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { formatDateTime } from "@/lib/format";
 type SP = Promise<{ success?: string; error?: string }>;
 
 export default async function UsuariosPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin"]);
+  await requirePermission("usuarios");
   const [users, sp] = await Promise.all([listUsers(), searchParams]);
   return (
     <div className="space-y-6">
@@ -25,7 +25,8 @@ export default async function UsuariosPage({ searchParams }: { searchParams: SP 
       </div>
       <Flash success={sp.success} error={sp.error} />
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Nombre</th>
@@ -71,6 +72,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: SP 
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

@@ -41,7 +41,7 @@ export default async function NuevaVentaPage({ searchParams }: { searchParams: S
       <Card>
         <CardContent className="pt-6">
           <form action={createOrderAction} className="space-y-5">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="customer_id">Cliente</Label>
                 <Select id="customer_id" name="customer_id" defaultValue="">
@@ -57,7 +57,7 @@ export default async function NuevaVentaPage({ searchParams }: { searchParams: S
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="origin">Origen</Label>
                 <Select id="origin" name="origin" defaultValue="pos">

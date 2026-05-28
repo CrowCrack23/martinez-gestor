@@ -26,9 +26,9 @@ export function BomComponentsEditor({
           <Plus className="size-3.5" /> Agregar insumo
         </Button>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2 overflow-x-auto">
         {rows.map((r, idx) => (
-          <div key={r.uid} className="grid grid-cols-[1fr_140px_auto] gap-2 items-start">
+          <div key={r.uid} className="grid grid-cols-[1fr_140px_auto] gap-2 items-start min-w-[420px]">
             <Select name="component_product_id" required value={r.component_product_id}
               onChange={(e) => setRows((cur) => cur.map((x) => x.uid === r.uid ? { ...x, component_product_id: e.target.value } : x))}>
               <option value="">— Producto —</option>

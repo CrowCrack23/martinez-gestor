@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listPurchaseOrders, STATUS_BADGE, STATUS_LABEL } from "@/lib/purchases";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import type { PurchaseOrderStatus } from "@/lib/supabase-types";
 type SP = Promise<{ status?: PurchaseOrderStatus; success?: string; error?: string }>;
 
 export default async function ComprasPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "almacenero", "contador"]);
+  await requirePermission("compras");
   const sp = await searchParams;
   const filter = sp.status ? { status: sp.status } : undefined;
   const orders = await listPurchaseOrders(filter);
@@ -38,7 +38,8 @@ export default async function ComprasPage({ searchParams }: { searchParams: SP }
       </div>
 
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Código</th>
@@ -74,6 +75,7 @@ export default async function ComprasPage({ searchParams }: { searchParams: SP }
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

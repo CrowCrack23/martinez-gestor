@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listMovements, MOVEMENT_TYPE_LABEL } from "@/lib/inventory";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,7 +18,7 @@ const TYPE_BADGE: Record<string, string> = {
 };
 
 export default async function MovimientosPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "almacenero"]);
+  await requirePermission("movimientos");
   const [movements, sp] = await Promise.all([listMovements(200), searchParams]);
   return (
     <div className="space-y-6">
@@ -33,7 +33,8 @@ export default async function MovimientosPage({ searchParams }: { searchParams: 
       </div>
       <Flash success={sp.success} error={sp.error} />
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Fecha</th>
@@ -68,6 +69,7 @@ export default async function MovimientosPage({ searchParams }: { searchParams: 
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

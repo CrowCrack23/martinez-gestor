@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole, hasRole } from "@/lib/auth";
+import { hasRole, requirePermission } from "@/lib/auth";
 import { getBom } from "@/lib/production";
 import { listProductsLite } from "@/lib/products-lite";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ error?: string; success?: string }>;
 
 export default async function EditarRecetaPage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  const user = await requireRole(["admin", "almacenero"]);
+  const user = await requirePermission("recetas");
   const { id } = await params;
   const [bom, products, sp] = await Promise.all([getBom(id), listProductsLite(), searchParams]);
   if (!bom) notFound();
@@ -33,7 +33,7 @@ export default async function EditarRecetaPage({ params, searchParams }: { param
         <CardContent className="pt-6">
           <form action={update} className="space-y-5">
             <div className="space-y-2"><Label htmlFor="name">Nombre *</Label><Input id="name" name="name" required defaultValue={bom.name} /></div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="product_id">Producto terminado *</Label>
                 <Select id="product_id" name="product_id" required defaultValue={bom.product_id}>

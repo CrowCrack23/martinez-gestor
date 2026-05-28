@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import {
   listOrders, ORDER_STATUS_BADGE, ORDER_STATUS_LABEL, ORDER_ORIGIN_LABEL,
 } from "@/lib/sales";
@@ -13,7 +13,7 @@ import type { OrderOrigin, OrderStatus } from "@/lib/supabase-types";
 type SP = Promise<{ status?: OrderStatus; origin?: OrderOrigin; success?: string; error?: string }>;
 
 export default async function VentasPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "vendedor", "contador"]);
+  await requirePermission("ventas");
   const sp = await searchParams;
   const orders = await listOrders({ status: sp.status, origin: sp.origin });
 
@@ -42,7 +42,8 @@ export default async function VentasPage({ searchParams }: { searchParams: SP })
       </div>
 
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Código</th>
@@ -90,6 +91,7 @@ export default async function VentasPage({ searchParams }: { searchParams: SP })
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

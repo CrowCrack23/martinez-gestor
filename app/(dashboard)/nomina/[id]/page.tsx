@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { getPayrollRun, PAYROLL_STATUS_LABEL } from "@/lib/hr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ success?: string; error?: string }>;
 
 export default async function NominaDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  await requireRole(["admin", "rrhh", "contador"]);
+  await requirePermission("nomina");
   const { id } = await params;
   const [data, sp] = await Promise.all([getPayrollRun(id), searchParams]);
   if (!data) notFound();
@@ -39,7 +39,8 @@ export default async function NominaDetallePage({ params, searchParams }: { para
       <Flash success={sp.success} error={sp.error} />
 
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-3 py-3 font-medium">Empleado</th>
@@ -89,6 +90,7 @@ export default async function NominaDetallePage({ params, searchParams }: { para
             </tr>
           </tfoot>
         </table>
+        </div>
       </Card>
 
       {editable && (

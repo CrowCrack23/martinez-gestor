@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import {
   getOrder, ORDER_STATUS_BADGE, ORDER_STATUS_LABEL, ORDER_ORIGIN_LABEL, PAYMENT_METHOD_LABEL,
 } from "@/lib/sales";
@@ -24,7 +24,7 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ error?: string; success?: string }>;
 
 export default async function VentaDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  await requireRole(["admin", "vendedor", "contador"]);
+  await requirePermission("ventas");
   const { id } = await params;
   const [o, sp] = await Promise.all([getOrder(id), searchParams]);
   if (!o) notFound();
@@ -41,7 +41,7 @@ export default async function VentaDetallePage({ params, searchParams }: { param
         <Flash success={sp.success} error={sp.error} />
         <Card>
           <CardContent className="pt-6 space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div><div className="text-muted-foreground text-xs">Cliente</div><div>{o.customer_name ?? "Consumidor final"}</div></div>
               <div><div className="text-muted-foreground text-xs">Almacén origen</div><div>{o.warehouse_name}</div></div>
               <div><div className="text-muted-foreground text-xs">Origen</div><div>{ORDER_ORIGIN_LABEL[o.origin]}</div></div>
@@ -62,7 +62,8 @@ export default async function VentaDetallePage({ params, searchParams }: { param
           </CardContent>
         </Card>
         <Card>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
             <thead className="text-left text-muted-foreground border-b">
               <tr>
                 <th className="px-4 py-3 font-medium">Producto</th>
@@ -88,6 +89,7 @@ export default async function VentaDetallePage({ params, searchParams }: { param
               </tr>
             </tfoot>
           </table>
+        </div>
         </Card>
         <div>
           <Button asChild variant="ghost"><Link href="/ventas">← Volver</Link></Button>
@@ -110,7 +112,7 @@ export default async function VentaDetallePage({ params, searchParams }: { param
       <Card>
         <CardContent className="pt-6">
           <form action={update} className="space-y-5">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="customer_id">Cliente</Label>
                 <Select id="customer_id" name="customer_id" defaultValue={o.customer_id ?? ""}>
@@ -125,7 +127,7 @@ export default async function VentaDetallePage({ params, searchParams }: { param
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="origin">Origen</Label>
                 <Select id="origin" name="origin" defaultValue={o.origin}>

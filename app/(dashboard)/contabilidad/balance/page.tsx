@@ -1,4 +1,4 @@
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { trialBalance, ACCOUNT_TYPE_LABEL } from "@/lib/accounting";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import type { AccountType } from "@/lib/supabase-types";
 type SP = Promise<{ from?: string; to?: string; posted?: string }>;
 
 export default async function BalancePage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "contador"]);
+  await requirePermission("contabilidad");
   const sp = await searchParams;
   const postedOnly = sp.posted !== "0";
   const rows = await trialBalance({ from: sp.from, to: sp.to, postedOnly });
@@ -42,7 +42,8 @@ export default async function BalancePage({ searchParams }: { searchParams: SP }
 
       {(Object.entries(groups) as [AccountType, typeof rows][]).map(([t, list]) => (
         <Card key={t}>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
             <thead className="text-left text-muted-foreground border-b">
               <tr>
                 <th className="px-4 py-3 font-medium" colSpan={2}>{ACCOUNT_TYPE_LABEL[t]}</th>
@@ -74,6 +75,7 @@ export default async function BalancePage({ searchParams }: { searchParams: SP }
               )}
             </tbody>
           </table>
+        </div>
         </Card>
       ))}
     </div>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listJournalEntries, JOURNAL_STATUS_BADGE, JOURNAL_STATUS_LABEL } from "@/lib/accounting";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import type { JournalEntryStatus } from "@/lib/supabase-types";
 type SP = Promise<{ status?: JournalEntryStatus; success?: string; error?: string }>;
 
 export default async function AsientosPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "contador"]);
+  await requirePermission("contabilidad");
   const sp = await searchParams;
   const entries = await listJournalEntries({ status: sp.status });
   return (
@@ -30,7 +30,8 @@ export default async function AsientosPage({ searchParams }: { searchParams: SP 
         <Chip href="/contabilidad/asientos?status=contabilizada" active={sp.status === "contabilizada"}>Contabilizados</Chip>
       </div>
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Código</th>
@@ -61,6 +62,7 @@ export default async function AsientosPage({ searchParams }: { searchParams: SP 
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

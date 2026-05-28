@@ -52,13 +52,13 @@ export function PurchaseLineEditor({
           <Plus className="size-3.5" /> Agregar línea
         </Button>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2 overflow-x-auto">
         {rows.map((r, idx) => {
           const q = Number(r.quantity);
           const c = Number(r.unit_cost);
           const sub = Number.isFinite(q) && Number.isFinite(c) ? q * c : 0;
           return (
-            <div key={r.uid} className="grid grid-cols-[1fr_90px_120px_110px_auto] gap-2 items-start">
+            <div key={r.uid} className="grid grid-cols-[1fr_90px_120px_110px_auto] gap-2 items-start min-w-[560px]">
               <Select
                 name="product_id"
                 required

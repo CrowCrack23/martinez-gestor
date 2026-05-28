@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listStoresLite } from "@/lib/stores-lite";
 import { listCategoriesLite } from "@/lib/categories-lite";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { createProductAction } from "../actions";
 type SP = Promise<{ error?: string }>;
 
 export default async function NuevoProductoPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "almacenero"]);
+  await requirePermission("productos");
   const [sp, stores, categories] = await Promise.all([
     searchParams,
     listStoresLite(),

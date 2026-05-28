@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { getPurchaseOrder, STATUS_BADGE, STATUS_LABEL } from "@/lib/purchases";
 import { listSuppliers } from "@/lib/suppliers";
 import { listWarehouses } from "@/lib/warehouses";
@@ -25,7 +25,7 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ error?: string; success?: string }>;
 
 export default async function CompraDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  await requireRole(["admin", "almacenero", "contador"]);
+  await requirePermission("compras");
   const { id } = await params;
   const [po, sp] = await Promise.all([getPurchaseOrder(id), searchParams]);
   if (!po) notFound();
@@ -43,7 +43,7 @@ export default async function CompraDetallePage({ params, searchParams }: { para
         <Flash success={sp.success} error={sp.error} />
         <Card>
           <CardContent className="pt-6 space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div><div className="text-muted-foreground text-xs">Proveedor</div><div>{po.supplier_name}</div></div>
               <div><div className="text-muted-foreground text-xs">Almacén destino</div><div>{po.warehouse_name}</div></div>
               <div><div className="text-muted-foreground text-xs">Nº factura</div><div>{po.reference || "—"}</div></div>
@@ -59,7 +59,8 @@ export default async function CompraDetallePage({ params, searchParams }: { para
         </Card>
 
         <Card>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
             <thead className="text-left text-muted-foreground border-b">
               <tr>
                 <th className="px-4 py-3 font-medium">Producto</th>
@@ -85,6 +86,7 @@ export default async function CompraDetallePage({ params, searchParams }: { para
               </tr>
             </tfoot>
           </table>
+        </div>
         </Card>
 
         {po.movement_id && (
@@ -117,7 +119,7 @@ export default async function CompraDetallePage({ params, searchParams }: { para
       <Card>
         <CardContent className="pt-6">
           <form action={update} className="space-y-5">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="supplier_id">Proveedor *</Label>
                 <Select id="supplier_id" name="supplier_id" required defaultValue={po.supplier_id}>

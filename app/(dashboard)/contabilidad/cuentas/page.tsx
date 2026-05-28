@@ -1,5 +1,5 @@
 import { Trash2 } from "lucide-react";
-import { requireRole, hasRole } from "@/lib/auth";
+import { hasRole, requirePermission } from "@/lib/auth";
 import { listAccounts, ACCOUNT_TYPE_LABEL } from "@/lib/accounting";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { createAccountAction, deleteAccountAction, updateAccountAction } from ".
 type SP = Promise<{ success?: string; error?: string }>;
 
 export default async function CuentasPage({ searchParams }: { searchParams: SP }) {
-  const user = await requireRole(["admin", "contador"]);
+  const user = await requirePermission("contabilidad");
   const [accounts, sp] = await Promise.all([listAccounts(), searchParams]);
   const canDelete = hasRole(user, ["admin"]);
   return (
@@ -44,7 +44,8 @@ export default async function CuentasPage({ searchParams }: { searchParams: SP }
         </CardContent>
       </Card>
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-3 py-3 font-medium">Código</th>
@@ -85,6 +86,7 @@ export default async function CuentasPage({ searchParams }: { searchParams: SP }
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listAccounts } from "@/lib/accounting";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ function todayISO(): string {
 }
 
 export default async function NuevoAsientoPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "contador"]);
+  await requirePermission("contabilidad");
   const [accounts, sp] = await Promise.all([listAccounts(), searchParams]);
   const active = accounts.filter((a) => a.active);
   return (

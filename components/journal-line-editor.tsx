@@ -40,9 +40,9 @@ export function JournalLineEditor({
           <Plus className="size-3.5" /> Agregar línea
         </Button>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2 overflow-x-auto">
         {rows.map((r, idx) => (
-          <div key={r.uid} className="grid grid-cols-[1fr_1fr_120px_120px_auto] gap-2 items-start">
+          <div key={r.uid} className="grid grid-cols-[1fr_1fr_120px_120px_auto] gap-2 items-start min-w-[600px]">
             <Select name="account_id" required value={r.account_id}
               onChange={(e) => setRows((cur) => cur.map((x) => x.uid === r.uid ? { ...x, account_id: e.target.value } : x))}>
               <option value="">— Cuenta —</option>

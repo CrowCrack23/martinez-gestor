@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { getBom, getProductionOrder, PRODUCTION_STATUS_BADGE, PRODUCTION_STATUS_LABEL } from "@/lib/production";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,7 +12,7 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ success?: string; error?: string }>;
 
 export default async function ProduccionDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  await requireRole(["admin", "almacenero"]);
+  await requirePermission("produccion");
   const { id } = await params;
   const [po, sp] = await Promise.all([getProductionOrder(id), searchParams]);
   if (!po) notFound();
@@ -38,7 +38,7 @@ export default async function ProduccionDetallePage({ params, searchParams }: { 
       <Flash success={sp.success} error={sp.error} />
       <Card>
         <CardContent className="pt-6 space-y-3 text-sm">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><div className="text-muted-foreground text-xs">Receta</div><div>{po.bom_name}</div></div>
             <div><div className="text-muted-foreground text-xs">Producto terminado</div><div>{po.finished_product_name}</div></div>
             <div><div className="text-muted-foreground text-xs">Almacén</div><div>{po.warehouse_name}</div></div>
@@ -54,7 +54,8 @@ export default async function ProduccionDetallePage({ params, searchParams }: { 
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm font-medium mb-2">Insumos a consumir</div>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
               <thead className="text-left text-muted-foreground">
                 <tr><th className="py-1">Producto</th><th className="py-1 text-right">x unidad</th><th className="py-1 text-right">Total</th></tr>
               </thead>
@@ -73,6 +74,7 @@ export default async function ProduccionDetallePage({ params, searchParams }: { 
                 </tr>
               </tbody>
             </table>
+        </div>
           </CardContent>
         </Card>
       )}

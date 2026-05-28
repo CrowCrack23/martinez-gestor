@@ -30,7 +30,7 @@ export default async function EditarClientePage({ params, searchParams }: { para
         <CardContent className="pt-6">
           <form action={update} className="space-y-4">
             <div className="space-y-2"><Label htmlFor="name">Nombre *</Label><Input id="name" name="name" required defaultValue={c.name} /></div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2"><Label htmlFor="phone">Teléfono</Label><Input id="phone" name="phone" defaultValue={c.phone} /></div>
               <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" defaultValue={c.email} /></div>
             </div>

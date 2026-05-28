@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listProductionOrders, PRODUCTION_STATUS_BADGE, PRODUCTION_STATUS_LABEL } from "@/lib/production";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { formatDateTime } from "@/lib/format";
 type SP = Promise<{ success?: string; error?: string }>;
 
 export default async function ProduccionPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "almacenero"]);
+  await requirePermission("produccion");
   const [orders, sp] = await Promise.all([listProductionOrders(), searchParams]);
   return (
     <div className="space-y-6">
@@ -23,7 +23,8 @@ export default async function ProduccionPage({ searchParams }: { searchParams: S
       </div>
       <Flash success={sp.success} error={sp.error} />
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Código</th>
@@ -54,6 +55,7 @@ export default async function ProduccionPage({ searchParams }: { searchParams: S
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

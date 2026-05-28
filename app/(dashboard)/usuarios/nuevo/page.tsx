@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listRoles } from "@/lib/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { createUserAction } from "../actions";
 type SP = Promise<{ error?: string }>;
 
 export default async function NuevoUsuarioPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin"]);
+  await requirePermission("usuarios");
   const [roles, sp] = await Promise.all([listRoles(), searchParams]);
   return (
     <div className="max-w-xl space-y-6">
@@ -35,7 +35,7 @@ export default async function NuevoUsuarioPage({ searchParams }: { searchParams:
             </div>
             <div className="space-y-2">
               <Label>Roles</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {roles.map((r) => (
                   <label key={r.id} className="flex items-start gap-2 p-2 border rounded-md text-sm hover:bg-muted/30 cursor-pointer">
                     <input type="checkbox" name="roles" value={r.id} className="mt-0.5 size-4" />

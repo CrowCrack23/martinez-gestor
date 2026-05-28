@@ -23,7 +23,7 @@ export default async function NuevoPeriodoPage({ searchParams }: { searchParams:
       <Card>
         <CardContent className="pt-6">
           <form action={createPayrollRunAction} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2"><Label htmlFor="period_start">Inicio</Label><Input id="period_start" name="period_start" type="date" required defaultValue={firstOfMonth} /></div>
               <div className="space-y-2"><Label htmlFor="period_end">Fin</Label><Input id="period_end" name="period_end" type="date" required defaultValue={lastOfMonth} /></div>
             </div>

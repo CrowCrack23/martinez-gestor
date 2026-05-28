@@ -33,7 +33,7 @@ export default async function EditarProveedorPage({ params, searchParams }: { pa
               <Label htmlFor="name">Nombre *</Label>
               <Input id="name" name="name" required defaultValue={s.name} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="contact_name">Contacto</Label>
                 <Input id="contact_name" name="contact_name" defaultValue={s.contact_name} />
@@ -43,7 +43,7 @@ export default async function EditarProveedorPage({ params, searchParams }: { pa
                 <Input id="tax_id" name="tax_id" defaultValue={s.tax_id} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="phone">Teléfono</Label>
                 <Input id="phone" name="phone" defaultValue={s.phone} />

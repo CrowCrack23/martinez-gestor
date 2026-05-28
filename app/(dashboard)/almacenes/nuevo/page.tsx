@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listStoresLite } from "@/lib/stores-lite";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ import { createWarehouseAction } from "../actions";
 type SP = Promise<{ error?: string }>;
 
 export default async function NuevoAlmacenPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "almacenero"]);
+  await requirePermission("almacenes");
   const [stores, sp] = await Promise.all([listStoresLite(), searchParams]);
   return (
     <div className="max-w-xl space-y-6">
@@ -26,7 +26,7 @@ export default async function NuevoAlmacenPage({ searchParams }: { searchParams:
       <Card>
         <CardContent className="pt-6">
           <form action={createWarehouseAction} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="code">Código</Label>
                 <Input id="code" name="code" required placeholder="ALM-MIR" />

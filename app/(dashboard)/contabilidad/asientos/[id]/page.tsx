@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { getJournalEntry, listAccounts, JOURNAL_STATUS_BADGE, JOURNAL_STATUS_LABEL } from "@/lib/accounting";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ success?: string; error?: string }>;
 
 export default async function AsientoDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  await requireRole(["admin", "contador"]);
+  await requirePermission("contabilidad");
   const { id } = await params;
   const [entry, sp] = await Promise.all([getJournalEntry(id), searchParams]);
   if (!entry) notFound();
@@ -32,7 +32,7 @@ export default async function AsientoDetallePage({ params, searchParams }: { par
         <Flash success={sp.success} error={sp.error} />
         <Card>
           <CardContent className="pt-6 space-y-2 text-sm">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Fecha" value={entry.entry_date} />
               <Field label="Contabilizada" value={entry.posted_at ? formatDateTime(entry.posted_at) : "—"} />
             </div>
@@ -40,7 +40,8 @@ export default async function AsientoDetallePage({ params, searchParams }: { par
           </CardContent>
         </Card>
         <Card>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
             <thead className="text-left text-muted-foreground border-b">
               <tr>
                 <th className="px-3 py-2 font-medium">Cuenta</th>
@@ -67,6 +68,7 @@ export default async function AsientoDetallePage({ params, searchParams }: { par
               </tr>
             </tfoot>
           </table>
+        </div>
         </Card>
         <div><Button asChild variant="ghost"><Link href="/contabilidad/asientos">← Volver</Link></Button></div>
       </div>

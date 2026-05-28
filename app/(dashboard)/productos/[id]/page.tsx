@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { getCatalogProduct } from "@/lib/products";
 import { listStoresLite } from "@/lib/stores-lite";
 import { listCategoriesLite } from "@/lib/categories-lite";
@@ -14,7 +14,7 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ error?: string; success?: string }>;
 
 export default async function ProductoDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  await requireRole(["admin", "almacenero"]);
+  await requirePermission("productos");
   const { id } = await params;
   const [p, sp, stores, categories] = await Promise.all([
     getCatalogProduct(id),

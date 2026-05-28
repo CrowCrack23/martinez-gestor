@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listStock } from "@/lib/inventory";
 import { stockValuation } from "@/lib/costing";
 import { listWarehouses } from "@/lib/warehouses";
@@ -13,7 +13,7 @@ import { Flash } from "@/components/flash";
 type SP = Promise<{ warehouse?: string; store?: string; low?: string; success?: string; error?: string }>;
 
 export default async function InventarioPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "almacenero", "vendedor"]);
+  await requirePermission("inventario");
   const sp = await searchParams;
   const filter = {
     warehouseId: sp.warehouse || undefined,
@@ -88,7 +88,8 @@ export default async function InventarioPage({ searchParams }: { searchParams: S
       )}
 
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Producto</th>
@@ -133,6 +134,7 @@ export default async function InventarioPage({ searchParams }: { searchParams: S
             </tfoot>
           )}
         </table>
+        </div>
       </Card>
     </div>
   );

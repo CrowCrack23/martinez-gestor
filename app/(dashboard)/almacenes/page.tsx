@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Pencil, Plus } from "lucide-react";
 import { listWarehouses, WAREHOUSE_TYPE_LABEL } from "@/lib/warehouses";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
@@ -9,7 +9,7 @@ import { Flash } from "@/components/flash";
 type SP = Promise<{ success?: string; error?: string }>;
 
 export default async function AlmacenesPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "almacenero"]);
+  await requirePermission("almacenes");
   const [warehouses, sp] = await Promise.all([listWarehouses(), searchParams]);
   return (
     <div className="space-y-6">
@@ -26,7 +26,8 @@ export default async function AlmacenesPage({ searchParams }: { searchParams: SP
       <Flash success={sp.success} error={sp.error} />
 
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Código</th>
@@ -63,6 +64,7 @@ export default async function AlmacenesPage({ searchParams }: { searchParams: SP
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

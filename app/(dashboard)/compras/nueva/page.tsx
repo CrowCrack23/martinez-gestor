@@ -42,7 +42,7 @@ export default async function NuevaCompraPage({ searchParams }: { searchParams: 
       <Card>
         <CardContent className="pt-6">
           <form action={createPurchaseOrderAction} className="space-y-5">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="supplier_id">Proveedor *</Label>
                 <Select id="supplier_id" name="supplier_id" required defaultValue="">

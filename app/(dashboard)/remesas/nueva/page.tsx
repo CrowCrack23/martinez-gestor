@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { getLatestRate, REM_PAYOUT_LABEL } from "@/lib/remittances";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { createRemittanceAction } from "../actions";
 type SP = Promise<{ error?: string }>;
 
 export default async function NuevaRemesaPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "vendedor", "contador"]);
+  await requirePermission("remesas");
   const [rate, sp] = await Promise.all([getLatestRate("USD", "CUP"), searchParams]);
   return (
     <div className="max-w-2xl space-y-6">
@@ -29,14 +29,14 @@ export default async function NuevaRemesaPage({ searchParams }: { searchParams: 
           <form action={createRemittanceAction} className="space-y-5">
             <div>
               <div className="text-sm font-medium mb-2">Remitente (envía)</div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2"><Label htmlFor="sender_name">Nombre *</Label><Input id="sender_name" name="sender_name" required /></div>
                 <div className="space-y-2"><Label htmlFor="sender_phone">Teléfono</Label><Input id="sender_phone" name="sender_phone" /></div>
               </div>
             </div>
             <div>
               <div className="text-sm font-medium mb-2">Beneficiario (recibe)</div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2"><Label htmlFor="beneficiary_name">Nombre *</Label><Input id="beneficiary_name" name="beneficiary_name" required /></div>
                 <div className="space-y-2"><Label htmlFor="beneficiary_phone">Teléfono</Label><Input id="beneficiary_phone" name="beneficiary_phone" /></div>
                 <div className="space-y-2"><Label htmlFor="beneficiary_doc">Cédula / CI</Label><Input id="beneficiary_doc" name="beneficiary_doc" /></div>
@@ -50,7 +50,7 @@ export default async function NuevaRemesaPage({ searchParams }: { searchParams: 
             </div>
             <div>
               <div className="text-sm font-medium mb-2">Montos</div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-2"><Label htmlFor="amount_usd">USD enviados *</Label><Input id="amount_usd" name="amount_usd" type="number" step="0.01" min={0.01} required /></div>
                 <div className="space-y-2"><Label htmlFor="exchange_rate">Tasa USD→CUP *</Label><Input id="exchange_rate" name="exchange_rate" type="number" step="0.0001" min={0.0001} required defaultValue={rate ? String(rate.rate) : ""} /></div>
                 <div className="space-y-2"><Label htmlFor="commission_usd">Comisión (USD)</Label><Input id="commission_usd" name="commission_usd" type="number" step="0.01" min={0} defaultValue="0" /></div>

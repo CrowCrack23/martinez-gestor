@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Pencil, Plus } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listSuppliers } from "@/lib/suppliers";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Flash } from "@/components/flash";
 type SP = Promise<{ success?: string; error?: string }>;
 
 export default async function ProveedoresPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "almacenero", "contador"]);
+  await requirePermission("proveedores");
   const [suppliers, sp] = await Promise.all([listSuppliers(), searchParams]);
   return (
     <div className="space-y-6">
@@ -24,7 +24,8 @@ export default async function ProveedoresPage({ searchParams }: { searchParams: 
       </div>
       <Flash success={sp.success} error={sp.error} />
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Nombre</th>
@@ -61,6 +62,7 @@ export default async function ProveedoresPage({ searchParams }: { searchParams: 
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

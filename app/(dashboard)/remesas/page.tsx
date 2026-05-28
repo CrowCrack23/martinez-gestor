@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus, Banknote } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listRemittances, REM_STATUS_BADGE, REM_STATUS_LABEL, REM_PAYOUT_LABEL } from "@/lib/remittances";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,7 +14,7 @@ const cupFmt = new Intl.NumberFormat("es-CU", { style: "currency", currency: "CU
 const usdFmt = new Intl.NumberFormat("es-CU", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 
 export default async function RemesasPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "vendedor", "contador"]);
+  await requirePermission("remesas");
   const sp = await searchParams;
   const list = await listRemittances({ status: sp.status });
   return (
@@ -39,7 +39,8 @@ export default async function RemesasPage({ searchParams }: { searchParams: SP }
       </div>
 
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Código</th>
@@ -74,6 +75,7 @@ export default async function RemesasPage({ searchParams }: { searchParams: SP }
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listRoles, listUsers } from "@/lib/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ error?: string }>;
 
 export default async function EditarUsuarioPage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  const current = await requireRole(["admin"]);
+  const current = await requirePermission("usuarios");
   const [{ id }, users, roles, sp] = await Promise.all([params, listUsers(), listRoles(), searchParams]);
   const user = users.find((u) => u.id === id);
   if (!user) notFound();
@@ -42,7 +42,7 @@ export default async function EditarUsuarioPage({ params, searchParams }: { para
             </div>
             <div className="space-y-2">
               <Label>Roles</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {roles.map((r) => (
                   <label key={r.id} className="flex items-start gap-2 p-2 border rounded-md text-sm hover:bg-muted/30 cursor-pointer">
                     <input type="checkbox" name="roles" value={r.id} defaultChecked={user.roles.includes(r.id)} className="mt-0.5 size-4" />

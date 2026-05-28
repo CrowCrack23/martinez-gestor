@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus, Check } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listCatalog } from "@/lib/products";
 import { listStoresLite } from "@/lib/stores-lite";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { formatPrice } from "@/lib/format";
 type SP = Promise<{ store?: string; success?: string; error?: string }>;
 
 export default async function ProductosPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "almacenero"]);
+  await requirePermission("productos");
   const sp = await searchParams;
   const [rows, stores] = await Promise.all([
     listCatalog({ store: sp.store || undefined }),
@@ -48,7 +48,8 @@ export default async function ProductosPage({ searchParams }: { searchParams: SP
       </Card>
 
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Producto</th>
@@ -83,6 +84,7 @@ export default async function ProductosPage({ searchParams }: { searchParams: SP
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

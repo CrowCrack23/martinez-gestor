@@ -48,7 +48,7 @@ export function MovementForm({
         {help && <p className="text-xs text-muted-foreground">{help}</p>}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label htmlFor="warehouse_from">Origen {needsFrom && <span className="text-destructive">*</span>}</Label>
           <Select id="warehouse_from" name="warehouse_from" disabled={!needsFrom} required={needsFrom} defaultValue="">

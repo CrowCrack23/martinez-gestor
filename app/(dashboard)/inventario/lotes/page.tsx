@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { listLots } from "@/lib/costing";
 import { listWarehouses } from "@/lib/warehouses";
 import { Card } from "@/components/ui/card";
@@ -21,7 +21,7 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 export default async function LotesPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "almacenero", "contador"]);
+  await requirePermission("lotes");
   const sp = await searchParams;
   const onlyRemaining = sp.all !== "1";
   const [lots, warehouses] = await Promise.all([
@@ -66,7 +66,8 @@ export default async function LotesPage({ searchParams }: { searchParams: SP }) 
       </Card>
 
       <Card>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Fecha</th>
@@ -121,6 +122,7 @@ export default async function LotesPage({ searchParams }: { searchParams: SP }) 
             </tfoot>
           )}
         </table>
+        </div>
       </Card>
 
       <p className="text-xs text-muted-foreground">
