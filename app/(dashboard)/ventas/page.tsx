@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, businessScope } from "@/lib/auth";
 import {
   listOrders, ORDER_STATUS_BADGE, ORDER_STATUS_LABEL, ORDER_ORIGIN_LABEL,
 } from "@/lib/sales";
@@ -13,9 +13,9 @@ import type { OrderOrigin, OrderStatus } from "@/lib/supabase-types";
 type SP = Promise<{ status?: OrderStatus; origin?: OrderOrigin; success?: string; error?: string }>;
 
 export default async function VentasPage({ searchParams }: { searchParams: SP }) {
-  await requirePermission("ventas");
+  const user = await requirePermission("ventas");
   const sp = await searchParams;
-  const orders = await listOrders({ status: sp.status, origin: sp.origin });
+  const orders = await listOrders({ status: sp.status, origin: sp.origin, scope: businessScope(user) });
 
   return (
     <div className="space-y-6">

@@ -20,6 +20,7 @@ export default async function NominaDetallePage({ params, searchParams }: { para
   const { run, items } = data;
   const editable = run.status === "borrador";
   const totalGross = items.reduce((s, i) => s + Number(i.gross), 0);
+  const totalCommission = items.reduce((s, i) => s + Number(i.commission), 0);
   const totalDeductions = items.reduce((s, i) => s + Number(i.deductions), 0);
   const totalNet = items.reduce((s, i) => s + Number(i.net), 0);
 
@@ -45,7 +46,8 @@ export default async function NominaDetallePage({ params, searchParams }: { para
             <tr>
               <th className="px-3 py-3 font-medium">Empleado</th>
               <th className="px-2 py-3 font-medium text-right">Base</th>
-              <th className="px-2 py-3 font-medium text-right">Días trab. / {items[0]?.days_in_period ?? "—"}</th>
+              <th className="px-2 py-3 font-medium text-right">Comisión</th>
+              <th className="px-2 py-3 font-medium text-right">Días / {items[0]?.days_in_period ?? "—"}</th>
               <th className="px-2 py-3 font-medium text-right">Bruto</th>
               <th className="px-2 py-3 font-medium text-right">Deducc.</th>
               <th className="px-2 py-3 font-medium text-right">Neto</th>
@@ -54,20 +56,23 @@ export default async function NominaDetallePage({ params, searchParams }: { para
           </thead>
           <tbody>
             {items.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Sin empleados activos al momento de creación.</td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Sin empleados activos al momento de creación.</td></tr>
             )}
             {items.map((it) => (
               <tr key={it.id} className="border-b last:border-b-0">
-                <td colSpan={7} className="p-0">
+                <td colSpan={8} className="p-0">
                   <form
                     action={editable ? updatePayrollItemAction.bind(null, run.id, it.id) : undefined}
-                    className="grid grid-cols-[1.4fr_100px_100px_120px_120px_120px_80px] gap-2 items-center px-3 py-2"
+                    className="grid grid-cols-[1.3fr_90px_110px_80px_110px_110px_110px_60px] gap-2 items-center px-3 py-2"
                   >
                     <div>
                       <div className="font-medium text-sm">{it.employee_name}</div>
                       <div className="text-xs text-muted-foreground">{it.notes}</div>
                     </div>
                     <div className="text-right font-mono text-xs text-muted-foreground">{formatPrice(it.base_salary)}</div>
+                    <div className="text-right font-mono text-xs text-muted-foreground" title={it.sales_base > 0 ? `Sobre ventas ${formatPrice(it.sales_base)}` : undefined}>
+                      {it.commission > 0 ? formatPrice(it.commission) : "—"}
+                    </div>
                     <Input name="days_worked" type="number" step="0.5" min={0} defaultValue={String(it.days_worked)} className="h-9 text-right" disabled={!editable} />
                     <Input name="gross" type="number" step="0.01" min={0} defaultValue={String(it.gross)} className="h-9 text-right" disabled={!editable} />
                     <Input name="deductions" type="number" step="0.01" min={0} defaultValue={String(it.deductions)} className="h-9 text-right" disabled={!editable} />
@@ -82,6 +87,7 @@ export default async function NominaDetallePage({ params, searchParams }: { para
             <tr className="font-medium border-t">
               <td className="px-3 py-3">Totales ({items.length})</td>
               <td></td>
+              <td className="px-2 py-3 text-right font-mono">{formatPrice(totalCommission)}</td>
               <td></td>
               <td className="px-2 py-3 text-right font-mono">{formatPrice(totalGross)}</td>
               <td className="px-2 py-3 text-right font-mono">{formatPrice(totalDeductions)}</td>

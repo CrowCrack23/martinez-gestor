@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth";
 import { listRoles, listUsers } from "@/lib/users";
+import { listStoresLite } from "@/lib/stores-lite";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +15,7 @@ type SP = Promise<{ error?: string }>;
 
 export default async function EditarUsuarioPage({ params, searchParams }: { params: Params; searchParams: SP }) {
   const current = await requirePermission("usuarios");
-  const [{ id }, users, roles, sp] = await Promise.all([params, listUsers(), listRoles(), searchParams]);
+  const [{ id }, users, roles, stores, sp] = await Promise.all([params, listUsers(), listRoles(), listStoresLite(), searchParams]);
   const user = users.find((u) => u.id === id);
   if (!user) notFound();
   const isSelf = current.id === user.id;
@@ -50,6 +51,18 @@ export default async function EditarUsuarioPage({ params, searchParams }: { para
                       <div className="font-medium">{r.name}</div>
                       <div className="text-xs text-muted-foreground">{r.description}</div>
                     </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Negocios</Label>
+              <p className="text-xs text-muted-foreground">Tiendas cuyos datos podrá ver. El rol Administrador ve todos.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {stores.map((s) => (
+                  <label key={s.slug} className="flex items-center gap-2 p-2 border rounded-md text-sm hover:bg-muted/30 cursor-pointer">
+                    <input type="checkbox" name="businesses" value={s.slug} defaultChecked={user.businesses.includes(s.slug)} className="size-4" />
+                    <span className="font-medium">{s.label}</span>
                   </label>
                 ))}
               </div>

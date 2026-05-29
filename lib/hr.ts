@@ -184,7 +184,8 @@ export async function createPayrollRun(input: {
     .select("id").single();
   if (error) throw error;
 
-  const { data: emps, error: eErr } = await sb.from("employees").select("id,monthly_salary").eq("active", true);
+  const { data: emps, error: eErr } = await sb.from("employees")
+    .select("id,monthly_salary,commission_rate,app_user_id").eq("active", true);
   if (eErr) throw eErr;
   if (!emps || emps.length === 0) { bust(TAG_PAY); return run.id; }
 
@@ -200,19 +201,45 @@ export async function createPayrollRun(input: {
     }
   }
 
+  // Comisión: ventas confirmadas por el usuario del empleado dentro del período.
+  // Solo se consulta si algún empleado tiene comisión y usuario enlazado.
+  const salesByUser = new Map<string, number>();
+  const anyCommission = emps.some((e) => Number(e.commission_rate) > 0 && e.app_user_id);
+  if (anyCommission) {
+    const endExclusive = new Date(input.period_end + "T00:00:00Z");
+    endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+    const { data: orders, error: oErr } = await sb
+      .from("orders")
+      .select("total_amount,confirmed_by,confirmed_at")
+      .eq("status", "confirmada")
+      .gte("confirmed_at", input.period_start)
+      .lt("confirmed_at", endExclusive.toISOString());
+    if (oErr) throw oErr;
+    for (const o of orders ?? []) {
+      if (!o.confirmed_by) continue;
+      salesByUser.set(o.confirmed_by, (salesByUser.get(o.confirmed_by) ?? 0) + Number(o.total_amount));
+    }
+  }
+
   const total = daysBetween(input.period_start, input.period_end);
   const items = emps.map((e) => {
     const worked = presentByEmp.get(e.id) ?? 0;
     const base = Number(e.monthly_salary);
     // Si no hay registros de asistencia, asumir que trabajó todo el período
     const effective = att && att.length > 0 ? worked : total;
-    const gross = Math.round(base * (effective / total) * 100) / 100;
+    const baseProrated = Math.round(base * (effective / total) * 100) / 100;
+    const rate = Number(e.commission_rate);
+    const salesBase = e.app_user_id ? salesByUser.get(e.app_user_id) ?? 0 : 0;
+    const commission = rate > 0 ? Math.round(salesBase * (rate / 100) * 100) / 100 : 0;
+    const gross = Math.round((baseProrated + commission) * 100) / 100;
     return {
       payroll_run_id: run.id,
       employee_id: e.id,
-      base_salary: base,
+      base_salary: baseProrated,
       days_worked: effective,
       days_in_period: total,
+      sales_base: salesBase,
+      commission,
       gross,
       deductions: 0,
       net: gross,

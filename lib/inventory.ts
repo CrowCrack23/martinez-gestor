@@ -36,7 +36,7 @@ type StockJoinRow = {
 };
 
 export const listStock = unstable_cache(
-  async (filter?: { warehouseId?: string; store?: string; lowOnly?: boolean }): Promise<StockRow[]> => {
+  async (filter?: { warehouseId?: string; store?: string; lowOnly?: boolean; scope?: string[] }): Promise<StockRow[]> => {
     const sb = getSupabase();
     let q = sb
       .from("stock_locations")
@@ -45,6 +45,7 @@ export const listStock = unstable_cache(
       );
     if (filter?.warehouseId) q = q.eq("warehouse_id", filter.warehouseId);
     if (filter?.store) q = q.eq("products.store", filter.store);
+    if (filter?.scope) q = q.in("products.store", filter.scope);
     const { data, error } = await q;
     if (error) throw error;
     const raw = (data ?? []) as unknown as StockJoinRow[];

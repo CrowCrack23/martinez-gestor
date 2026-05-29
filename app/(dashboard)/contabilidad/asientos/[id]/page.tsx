@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, businessScope } from "@/lib/auth";
 import { getJournalEntry, listAccounts, JOURNAL_STATUS_BADGE, JOURNAL_STATUS_LABEL } from "@/lib/accounting";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,9 +18,9 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ success?: string; error?: string }>;
 
 export default async function AsientoDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  await requirePermission("contabilidad");
+  const user = await requirePermission("contabilidad");
   const { id } = await params;
-  const [entry, sp] = await Promise.all([getJournalEntry(id), searchParams]);
+  const [entry, sp] = await Promise.all([getJournalEntry(id, businessScope(user)), searchParams]);
   if (!entry) notFound();
   const editable = entry.status === "borrador";
   const balanced = Math.abs(entry.total_debit - entry.total_credit) < 0.005;

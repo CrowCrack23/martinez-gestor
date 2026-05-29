@@ -5,7 +5,7 @@ import {
   cancelRemittance, createRemittance, deleteRemittance, payRemittance,
   updateRemittance, upsertExchangeRate, deleteExchangeRate,
 } from "@/lib/remittances";
-import type { RemittancePayoutMethod } from "@/lib/supabase-types";
+import type { RemittancePayoutMethod, RemittanceOrigin } from "@/lib/supabase-types";
 import { optionalString, requireString, ValidationError } from "@/lib/validation";
 
 const METHODS: RemittancePayoutMethod[] = ["efectivo", "tarjeta_cup", "transferencia", "otro"];
@@ -15,11 +15,18 @@ function parseMethod(v: FormDataEntryValue | null): RemittancePayoutMethod {
   return s as RemittancePayoutMethod;
 }
 
+const ORIGINS: RemittanceOrigin[] = ["eeuu", "europa"];
+function parseOrigin(v: FormDataEntryValue | null): RemittanceOrigin {
+  const s = String(v ?? "eeuu");
+  if (!ORIGINS.includes(s as RemittanceOrigin)) throw new ValidationError("Origen inválido.");
+  return s as RemittanceOrigin;
+}
+
 function parseFields(form: FormData) {
   const usd = Number(form.get("amount_usd") ?? 0);
   const rate = Number(form.get("exchange_rate") ?? 0);
   const comm = Number(form.get("commission_usd") ?? 0);
-  if (!Number.isFinite(usd) || usd <= 0) throw new ValidationError("Monto USD inválido.");
+  if (!Number.isFinite(usd) || usd <= 0) throw new ValidationError("Monto enviado inválido.");
   if (!Number.isFinite(rate) || rate <= 0) throw new ValidationError("Tasa de cambio inválida.");
   if (!Number.isFinite(comm) || comm < 0) throw new ValidationError("Comisión inválida.");
   return {
@@ -32,6 +39,7 @@ function parseFields(form: FormData) {
     amount_usd: usd,
     exchange_rate: rate,
     commission_usd: comm,
+    origin: parseOrigin(form.get("origin")),
     payout_method: parseMethod(form.get("payout_method")),
     notes: optionalString(form, "notes"),
   };

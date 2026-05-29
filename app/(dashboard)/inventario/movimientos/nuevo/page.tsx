@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, businessScope } from "@/lib/auth";
 import { listWarehouses } from "@/lib/warehouses";
 import { listProductsLite } from "@/lib/products-lite";
 import { Button } from "@/components/ui/button";
@@ -11,10 +11,11 @@ import { MovementForm } from "./movement-form";
 type SP = Promise<{ error?: string }>;
 
 export default async function NuevoMovimientoPage({ searchParams }: { searchParams: SP }) {
-  await requirePermission("movimientos");
+  const user = await requirePermission("movimientos");
+  const scope = businessScope(user);
   const [warehouses, products, sp] = await Promise.all([
-    listWarehouses(),
-    listProductsLite(),
+    listWarehouses(scope),
+    listProductsLite(scope),
     searchParams,
   ]);
   return (

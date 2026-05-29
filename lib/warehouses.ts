@@ -14,13 +14,16 @@ export type Warehouse = Database["public"]["Tables"]["warehouses"]["Row"];
 const TAG = "warehouses";
 
 export const listWarehouses = unstable_cache(
-  async (): Promise<Warehouse[]> => {
+  async (scope?: string[]): Promise<Warehouse[]> => {
     const sb = getSupabase();
-    const { data, error } = await sb
+    let q = sb
       .from("warehouses")
       .select("*")
       .order("active", { ascending: false })
       .order("name", { ascending: true });
+    // scope: limitar a almacenes de las tiendas (negocios) del usuario.
+    if (scope) q = q.in("store_slug", scope);
+    const { data, error } = await q;
     if (error) throw error;
     return data ?? [];
   },

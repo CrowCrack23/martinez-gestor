@@ -1,6 +1,6 @@
 # Handoff — Martínez Gestor (ERP)
 
-Documento para que otro agente retome el trabajo sin contexto previo. Fecha de corte: **2026-05-27**.
+Documento para que otro agente retome el trabajo sin contexto previo. Fecha de corte: **2026-05-29**.
 
 ---
 
@@ -35,6 +35,7 @@ ERP en `D:\Work\Selfish\martinez-gestor` para una empresa cubana del cliente Mar
 | 0012 | `0012_inventory_costing.sql` | `inventory_lots`, `inventory_lot_consumptions` + lotes de apertura a costo 0. **PENDIENTE DE APLICAR en Supabase.** |
 | 0013 | `0013_online_orders.sql` | columnas de pago en `orders` + tabla `online_payments` (pasarela). **PENDIENTE DE APLICAR.** Habilita el pago con tarjeta de la tienda `martinez-global`. |
 | 0014 | `0014_products_online_flag.sql` | columna `online_visible` en `products`. **PENDIENTE DE APLICAR — antes de correr la tienda**, o `listOnlineProducts` falla. Habilita el CRUD de productos del ERP (`/productos`) y el toggle "se vende online". |
+| 0015 | `0015_user_businesses.sql` | tabla `user_businesses` (usuario→tienda, M:N) + columna `business` en `journal_entries`. **PENDIENTE DE APLICAR.** Habilita el alcance por negocio (ver §2.bis). |
 
 **Numeración continúa desde martinez-global** (0001..0004 son de allí).
 
@@ -80,6 +81,31 @@ ERP en `D:\Work\Selfish\martinez-gestor` para una empresa cubana del cliente Mar
 - Remesa entregada → Caja CUP / Comisiones remesas, solo la comisión convertida a CUP (el principal USD↔CUP es pase neto).
 
 **Inmutabilidad post-confirmación:** triggers `guard_*_immutable` en BD impiden modificar líneas de OC recibida, orden confirmada, asiento contabilizado y nómina cerrada.
+
+### 🔐 Control de acceso (2 dimensiones)
+
+1. **Permisos por módulo — `lib/permissions.ts`** (fuente única). `PERMISSIONS` (un permiso por módulo), `ROLE_PERMISSIONS` (matriz rol→permisos; `admin = "*"`), helper `roleListHasPermission`. El sidebar (`components/sidebar.tsx`, cada item con `permission`) y los guards de página (`requirePermission("<modulo>")` en `lib/auth.ts`, redirige a `/sin-acceso`) leen de la misma matriz → no divergen. Para cambiar qué ve un rol se edita SOLO `ROLE_PERMISSIONS`. Restricciones de escritura más finas que la vista del módulo (p.ej. contador ve `/ventas` pero no `/ventas/nueva`; borrar = solo admin) quedan como `requireRole([...])` explícito en la página `nueva`/`[id]` o en la server action. Roles fijos (seed 0005), sin CRUD de roles.
+
+2. **Alcance por negocio — `lib/auth.ts` `businessScope(user)`** (migración 0015). Un "negocio" = una tienda (`stores`: ropa, motos, comida, intimo). `user_businesses` asigna tiendas a un usuario; `CurrentUser` trae `businesses[]` + `allBusinesses` (admin=true). Las lecturas aceptan `scope?: string[]` (o `filter.scope`) y filtran con `.in(...)`: productos (`store`), inventario (`products.store`), warehouses (`store_slug`), ventas/compras (`warehouses.store_slug`), contabilidad (`journal_entries.business`). Los `get*` por id reciben scope y devuelven null si el registro no pertenece. Las páginas pasan `businessScope(user)`. Remesas NO se filtran por negocio. `journal_entries.business` lo setea auto-accounting desde la tienda de la operación; asiento manual tiene selector. La UI de `/usuarios` asigna negocios con checkboxes.
+
+### 📱 Responsive (móvil)
+
+`components/dashboard-shell.tsx` (client) envuelve el dashboard: barra superior con hamburguesa + **sidebar como drawer** en `<lg`, fijo en `lg+`. Todas las tablas van envueltas en `overflow-x-auto` con `min-w-[640px]`; los editores de líneas y formularios `grid-cols-*` colapsan a 1 columna en móvil (`grid-cols-1 sm:grid-cols-N`).
+
+### 🤖 Asistente IA — Mastra (solo admin, SOLO LECTURA)
+
+Integrado **dentro** del ERP (no proyecto aparte). `mastra/` en la raíz (alias `@/mastra` → `./mastra`; el proyecto NO usa `src/`).
+- `mastra/index.ts` — instancia Mastra mínima (3 agentes + PinoLogger; sin storage/DuckDB/observability para evitar binarios nativos).
+- `mastra/agents/erp-agent.ts` — fábrica que crea 3 agentes (uno por proveedor): `erpOpenai`, `erpAnthropic`, `erpGoogle`. Modelos por env (`MASTRA_MODEL_OPENAI/ANTHROPIC/GOOGLE`), Mastra enruta por string `provider/model` con su gateway interno (no hacen falta paquetes `@ai-sdk/*`).
+- `mastra/tools/erp-tools.ts` — **15 tools de solo lectura** que envuelven `lib/` (ventas, stock, valor, movimientos, compras, balance, productos, almacenes, remesas, empleados, nómina, producción, clientes, proveedores) + `app_navegacion` (mapa de rutas/cómo-hacer). Scope total (es admin).
+- `lib/ai-providers.ts` — catálogo client-safe (OpenAI/Anthropic/Google) usado por UI y route.
+- `app/api/asistente/route.ts` — POST gateado a admin (`getCurrentUser`, 403 si no), elige agente por `provider` del body, valida la API key, `agent.generate()`.
+- `app/(dashboard)/asistente/page.tsx` + `components/assistant-chat.tsx` — chat simple con selector de proveedor (sin `ai-elements`).
+- Permiso `asistente` (solo admin); item "Asistente IA" en sidebar; `serverExternalPackages: ["@mastra/core","@mastra/loggers"]` en next.config.
+- Env: `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` (al menos una).
+- ⚠️ **OpenAI y Google bloquean Cuba** (Anthropic también restringe). Las llamadas las hace el servidor, así que funciona si el deploy está fuera de Cuba.
+- ⚠️ Si renombras exports de `mastra/*` y el build da "Export … doesn't exist", es caché de Turbopack: `rm -rf .next` y reiniciar dev.
+- **Pendiente Fase 2:** tools de ESCRITURA (crear borradores, recibir/confirmar/registrar) con confirmación humana obligatoria (`confirmar:true` + el agente resume antes). Aún no implementadas — el agente es solo lectura.
 
 ### 🚧 Git
 
@@ -137,12 +163,15 @@ Lee `lib/auth.ts`, `lib/inventory.ts`, `lib/purchases.ts` y una página existent
 
 ### Próximas tareas (orden sugerido)
 
-1. **Resolver push pendiente** (§5).
-2. **Decidir limpieza de warehouses auto-seedeados** (preguntar antes de hacer cambios — el usuario lo notó pero no decidió). Hay 4 warehouses tipo `tienda_online` creados en 0005 que pueden no reflejar la operación real.
-3. **Integración compras→contabilidad** como primer caso de uso: cuando `receivePurchaseOrder` complete, generar un `journal_entries` borrador con líneas `Inventario (debe) / Cuentas por pagar (haber)`. Probablemente exponer una opción "contabilizar al recibir" configurable.
-4. **Validar stock disponible antes de confirmar venta.** Hoy el trigger en BD impide stock negativo, pero la UI no avisa. Agregar consulta de stock por línea en `confirmOrder` y rechazar con mensaje claro si falta.
-5. **POS:** crear `/pos` separado de `/ventas/nueva` con UI minimalista para tablet (búsqueda rápida por nombre, autocompletado, sumar al ticket, cobrar de un toque).
-6. **Reportes:** `/reportes/ventas-por-tienda`, `/reportes/pl`, `/reportes/top-productos`.
+1. **Aplicar migraciones pendientes en Supabase:** 0012, 0013, 0014, 0015 (el resto ya debería estar). Sin 0015 el login carga negocios vacíos (no rompe; admin ve todo).
+2. **Resolver push pendiente** (§5) — todo el trabajo de las últimas sesiones sigue solo en commits/working-tree locales. **Riesgo de pérdida.**
+3. **Fase 2 del asistente IA: tools de ESCRITURA** con confirmación humana (crear borrador de compra/venta/movimiento/remesa, recibir/confirmar, registrar tasa). Patrón: cada tool mutadora exige `confirmar:true` y el system prompt obliga al agente a resumir y pedir confirmación antes. Pasar `user_id` del admin a las tools (runtimeContext o closure). Respetar reglas de inmutabilidad de la BD.
+4. **Validar stock disponible antes de confirmar venta** en la UI (hoy solo lo rechaza el trigger de BD con error feo).
+5. **Reportes de gestión:** P&L, ventas por negocio, top SKUs, rotación, márgenes.
+6. **Decidir limpieza de warehouses auto-seedeados** (sigue abierto: 4 `tienda_online` creados en 0005 — preguntar antes de tocar).
+7. **POS** dedicado para teléfono (búsqueda por código de barras, cobro rápido).
+
+**Ya resuelto en sesiones recientes (no rehacer):** contabilidad automática + costeo FIFO (0012), pago online (0013), productos/online flag (0014), **permisos por módulo + página /sin-acceso**, **alcance por negocio (0015)**, **responsive/drawer móvil**, **asistente IA Mastra multi-proveedor (solo lectura)**.
 
 ### Cómo validar cambios
 
@@ -176,32 +205,39 @@ app/
 
 lib/
   supabase.ts, supabase-types.ts     # cliente + tipos manuales
-  auth.ts, session.ts                # cookie HMAC + scrypt + requireUser/Role
+  auth.ts, session.ts                # cookie HMAC + scrypt + requireUser/requireRole/requirePermission + businessScope
+  permissions.ts                     # matriz rol→permisos (fuente única de acceso por módulo)
+  ai-providers.ts                    # catálogo OpenAI/Anthropic/Google (client-safe)
   validation.ts, format.ts, utils.ts # helpers
-  warehouses.ts, inventory.ts        # módulo 1
+  warehouses.ts, inventory.ts        # módulo 1 (+ costing.ts FIFO)
   suppliers.ts, purchases.ts         # módulo 2
   customers.ts, sales.ts             # módulo 3
   hr.ts                              # módulo 4 (empleados+asistencia+nómina)
   production.ts                      # módulo 5 (BOM+órdenes)
   remittances.ts                     # módulo 6
-  accounting.ts                      # módulo 7
-  users.ts                           # CRUD app_users
-  products-lite.ts, stores-lite.ts   # readonly de tablas de martinez-global
+  accounting.ts, auto-accounting.ts  # módulo 7 (+ asientos automáticos)
+  users.ts                           # CRUD app_users (roles + negocios)
+  products.ts, products-lite.ts, stores-lite.ts, categories-lite.ts
+
+mastra/                              # Asistente IA (solo admin, solo lectura)
+  index.ts                           # instancia Mastra (3 agentes)
+  agents/erp-agent.ts                # fábrica por proveedor
+  tools/erp-tools.ts                 # 15 tools de lectura + navegación
 
 components/
-  sidebar.tsx                        # navegación con filtro por rol
+  dashboard-shell.tsx                # client: layout + drawer móvil (hamburguesa)
+  sidebar.tsx                        # navegación filtrada por permiso
+  assistant-chat.tsx                 # client: chat del asistente + selector de proveedor
   flash.tsx                          # banners success/error desde searchParams
   ui/                                # button, card, input, label, select, textarea
-  movement-form.tsx                  # cliente: inventory movement
-  purchase-line-editor.tsx           # cliente: líneas de OC
-  order-line-editor.tsx              # cliente: líneas de OV con auto-precio
-  bom-components-editor.tsx          # cliente: insumos de receta
-  journal-line-editor.tsx            # cliente: líneas de asiento (debe/haber)
+  movement-form.tsx, purchase-line-editor.tsx, order-line-editor.tsx,
+  bom-components-editor.tsx, journal-line-editor.tsx   # editores cliente
 
+app/api/asistente/route.ts           # endpoint del asistente (admin, multi-proveedor)
 proxy.ts                             # gate de auth (excepto /login)
-next.config.ts                       # security headers + remotePatterns Supabase
+next.config.ts                       # security headers + remotePatterns + serverExternalPackages (mastra)
 scripts/hash-password.mjs            # generar hashes, secret, o --create usuario
-supabase/migrations/0005..0011.sql   # 7 archivos idempotentes
+supabase/migrations/0005..0015.sql   # 11 archivos idempotentes
 ```
 
 ---

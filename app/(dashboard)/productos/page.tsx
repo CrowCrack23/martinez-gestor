@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus, Check } from "lucide-react";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, businessScope } from "@/lib/auth";
 import { listCatalog } from "@/lib/products";
 import { listStoresLite } from "@/lib/stores-lite";
 import { Button } from "@/components/ui/button";
@@ -11,10 +11,11 @@ import { formatPrice } from "@/lib/format";
 type SP = Promise<{ store?: string; success?: string; error?: string }>;
 
 export default async function ProductosPage({ searchParams }: { searchParams: SP }) {
-  await requirePermission("productos");
+  const user = await requirePermission("productos");
+  const scope = businessScope(user);
   const sp = await searchParams;
   const [rows, stores] = await Promise.all([
-    listCatalog({ store: sp.store || undefined }),
+    listCatalog({ store: sp.store || undefined, scope }),
     listStoresLite(),
   ]);
   const storeLabel = (slug: string) => stores.find((s) => s.slug === slug)?.label ?? slug;

@@ -54,11 +54,11 @@ export function DashboardShell({
         />
       )}
 
-      {/* Sidebar: drawer deslizable en móvil, fijo en desktop */}
+      {/* Sidebar: drawer deslizable en móvil, fijo (sticky) en desktop */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-out",
-          "lg:static lg:z-auto lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 h-dvh w-64 transition-transform duration-200 ease-out",
+          "lg:sticky lg:top-0 lg:z-auto lg:shrink-0 lg:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -66,7 +66,7 @@ export function DashboardShell({
       </div>
 
       <main className="flex-1 min-w-0 bg-background pt-14 lg:pt-0">
-        <div className="p-4 sm:p-6 max-w-[1400px] mx-auto">{children}</div>
+        <div className="p-4 sm:p-6 max-w-[1400px] mx-auto w-full min-w-0">{children}</div>
       </main>
     </div>
   );

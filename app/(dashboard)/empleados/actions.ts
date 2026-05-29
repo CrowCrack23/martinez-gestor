@@ -10,6 +10,10 @@ import { optionalString, requireString, ValidationError } from "@/lib/validation
 function parseEmployee(form: FormData) {
   const monthly = Number(form.get("monthly_salary") ?? 0);
   if (!Number.isFinite(monthly) || monthly < 0) throw new ValidationError("Salario inválido.");
+  const commission = Number(form.get("commission_rate") ?? 0);
+  if (!Number.isFinite(commission) || commission < 0 || commission > 100) {
+    throw new ValidationError("Comisión inválida (0–100%).");
+  }
   return {
     code: requireString(form, "code", "Código").toUpperCase(),
     first_name: requireString(form, "first_name", "Nombre"),
@@ -21,7 +25,9 @@ function parseEmployee(form: FormData) {
     hire_date: optionalString(form, "hire_date") || null,
     position_id: optionalString(form, "position_id") || null,
     warehouse_id: optionalString(form, "warehouse_id") || null,
+    app_user_id: optionalString(form, "app_user_id") || null,
     monthly_salary: monthly,
+    commission_rate: commission,
     notes: optionalString(form, "notes"),
   };
 }

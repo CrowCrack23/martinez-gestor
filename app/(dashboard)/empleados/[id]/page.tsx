@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { hasRole, requirePermission } from "@/lib/auth";
 import { getEmployee, listPositions } from "@/lib/hr";
 import { listWarehouses } from "@/lib/warehouses";
+import { listUsers } from "@/lib/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,8 +19,8 @@ type SP = Promise<{ error?: string; success?: string }>;
 export default async function EditarEmpleadoPage({ params, searchParams }: { params: Params; searchParams: SP }) {
   const user = await requirePermission("empleados");
   const { id } = await params;
-  const [emp, positions, warehouses, sp] = await Promise.all([
-    getEmployee(id), listPositions(), listWarehouses(), searchParams,
+  const [emp, positions, warehouses, users, sp] = await Promise.all([
+    getEmployee(id), listPositions(), listWarehouses(), listUsers(), searchParams,
   ]);
   if (!emp) notFound();
   const canDelete = hasRole(user, ["admin"]);
@@ -64,7 +65,22 @@ export default async function EditarEmpleadoPage({ params, searchParams }: { par
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2"><Label htmlFor="hire_date">Ingreso</Label><Input id="hire_date" name="hire_date" type="date" defaultValue={emp.hire_date ?? ""} /></div>
               <div className="space-y-2"><Label htmlFor="termination_date">Baja</Label><Input id="termination_date" name="termination_date" type="date" defaultValue={emp.termination_date ?? ""} /></div>
-              <div className="space-y-2"><Label htmlFor="monthly_salary">Salario</Label><Input id="monthly_salary" name="monthly_salary" type="number" step="0.01" min={0} defaultValue={String(emp.monthly_salary)} /></div>
+              <div className="space-y-2"><Label htmlFor="monthly_salary">Salario base</Label><Input id="monthly_salary" name="monthly_salary" type="number" step="0.01" min={0} defaultValue={String(emp.monthly_salary)} /></div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="commission_rate">Comisión (%)</Label>
+                <Input id="commission_rate" name="commission_rate" type="number" step="0.01" min={0} max={100} defaultValue={String(emp.commission_rate)} />
+                <p className="text-xs text-muted-foreground">% sobre ventas que confirme su usuario.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="app_user_id">Usuario enlazado</Label>
+                <Select id="app_user_id" name="app_user_id" defaultValue={emp.app_user_id ?? ""}>
+                  <option value="">— Ninguno —</option>
+                  {users.map((u) => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
+                </Select>
+                <p className="text-xs text-muted-foreground">Necesario para la comisión.</p>
+              </div>
             </div>
             <div className="space-y-2"><Label htmlFor="address">Dirección</Label><Textarea id="address" name="address" rows={2} defaultValue={emp.address} /></div>
             <div className="space-y-2"><Label htmlFor="notes">Notas</Label><Textarea id="notes" name="notes" rows={2} defaultValue={emp.notes} /></div>

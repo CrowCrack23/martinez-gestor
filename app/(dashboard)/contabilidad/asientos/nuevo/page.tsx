@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, businessScope } from "@/lib/auth";
 import { listAccounts } from "@/lib/accounting";
+import { listStoresLite } from "@/lib/stores-lite";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
@@ -18,9 +20,11 @@ function todayISO(): string {
 }
 
 export default async function NuevoAsientoPage({ searchParams }: { searchParams: SP }) {
-  await requirePermission("contabilidad");
-  const [accounts, sp] = await Promise.all([listAccounts(), searchParams]);
+  const user = await requirePermission("contabilidad");
+  const [accounts, stores, sp] = await Promise.all([listAccounts(), listStoresLite(), searchParams]);
   const active = accounts.filter((a) => a.active);
+  // Si el usuario está limitado a negocios, solo puede asentar en los suyos.
+  const businessOptions = businessScope(user) ? stores.filter((s) => user.businesses.includes(s.slug)) : stores;
   return (
     <div className="max-w-3xl space-y-6">
       <h1 className="text-2xl font-semibold">Nuevo asiento</h1>
@@ -31,6 +35,13 @@ export default async function NuevoAsientoPage({ searchParams }: { searchParams:
             <div className="grid grid-cols-[160px_1fr] gap-3">
               <div className="space-y-2"><Label htmlFor="entry_date">Fecha *</Label><Input id="entry_date" name="entry_date" type="date" required defaultValue={todayISO()} /></div>
               <div className="space-y-2"><Label htmlFor="description">Descripción</Label><Textarea id="description" name="description" rows={1} placeholder="Concepto general del asiento" /></div>
+            </div>
+            <div className="space-y-2 max-w-xs">
+              <Label htmlFor="business">Negocio</Label>
+              <Select id="business" name="business" defaultValue={businessOptions.length === 1 ? businessOptions[0].slug : ""}>
+                <option value="">— General / consolidado —</option>
+                {businessOptions.map((s) => <option key={s.slug} value={s.slug}>{s.label}</option>)}
+              </Select>
             </div>
             <JournalLineEditor accounts={active.map((a) => ({ id: a.id, code: a.code, name: a.name }))} />
             <div className="flex gap-2 justify-end pt-2">

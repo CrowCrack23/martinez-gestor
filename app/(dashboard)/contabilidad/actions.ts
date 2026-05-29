@@ -81,6 +81,7 @@ export async function createJournalEntryAction(formData: FormData) {
       description: optionalString(formData, "description"),
       reference_type: optionalString(formData, "reference_type") || "manual",
       reference_id: optionalString(formData, "reference_id") || null,
+      business: optionalString(formData, "business") || null,
       created_by: user.id,
       lines: parseLines(formData),
     });

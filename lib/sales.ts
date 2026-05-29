@@ -50,16 +50,18 @@ type OrderRawRow = {
 };
 
 export const listOrders = unstable_cache(
-  async (filter?: { status?: OrderStatus; origin?: OrderOrigin }): Promise<OrderSummary[]> => {
+  async (filter?: { status?: OrderStatus; origin?: OrderOrigin; scope?: string[] }): Promise<OrderSummary[]> => {
     const sb = getSupabase();
     let q = sb
       .from("orders")
       .select(
-        "id,code,status,origin,customer_id,warehouse_id,payment_method,reference,total_amount,payment_status,created_at,confirmed_at,customers(name),warehouses!inner(name),order_lines(id)",
+        "id,code,status,origin,customer_id,warehouse_id,payment_method,reference,total_amount,payment_status,created_at,confirmed_at,customers(name),warehouses!inner(name,store_slug),order_lines(id)",
       )
       .order("created_at", { ascending: false });
     if (filter?.status) q = q.eq("status", filter.status);
     if (filter?.origin) q = q.eq("origin", filter.origin);
+    // scope: limitar a ventas cuyo almacén pertenece a las tiendas del usuario.
+    if (filter?.scope) q = q.in("warehouses.store_slug", filter.scope);
     const { data, error } = await q;
     if (error) throw error;
     const rows = (data ?? []) as unknown as OrderRawRow[];
@@ -104,6 +106,7 @@ export type OrderDetail = {
   customer_name: string | null;
   warehouse_id: string;
   warehouse_name: string;
+  warehouse_store: string | null;
   payment_method: PaymentMethod;
   reference: string;
   notes: string;
@@ -117,12 +120,12 @@ export type OrderDetail = {
   lines: OrderLine[];
 };
 
-export async function getOrder(id: string): Promise<OrderDetail | null> {
+export async function getOrder(id: string, scope?: string[]): Promise<OrderDetail | null> {
   const sb = getSupabase();
   const { data, error } = await sb
     .from("orders")
     .select(
-      "id,code,status,origin,customer_id,warehouse_id,payment_method,reference,notes,total_amount,payment_status,amount_charged,charge_currency,created_at,confirmed_at,movement_id,customers(name),warehouses!inner(name)",
+      "id,code,status,origin,customer_id,warehouse_id,payment_method,reference,notes,total_amount,payment_status,amount_charged,charge_currency,created_at,confirmed_at,movement_id,customers(name),warehouses!inner(name,store_slug)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -134,8 +137,12 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
     reference: string; notes: string; total_amount: number;
     payment_status: string; amount_charged: number | null; charge_currency: string | null;
     created_at: string; confirmed_at: string | null; movement_id: string | null;
-    customers: { name: string } | null; warehouses: { name: string } | null;
+    customers: { name: string } | null; warehouses: { name: string; store_slug: string | null } | null;
   };
+  // scope: si el usuario está limitado a ciertas tiendas y esta venta no pertenece, ocultar.
+  if (scope && (!d.warehouses?.store_slug || !scope.includes(d.warehouses.store_slug))) {
+    return null;
+  }
 
   const { data: rawLines, error: lErr } = await sb
     .from("order_lines")
@@ -166,6 +173,7 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
     customer_name: d.customers?.name ?? null,
     warehouse_id: d.warehouse_id,
     warehouse_name: d.warehouses?.name ?? "",
+    warehouse_store: d.warehouses?.store_slug ?? null,
     payment_method: d.payment_method,
     reference: d.reference,
     notes: d.notes,
@@ -296,6 +304,7 @@ export async function confirmOrder(id: string, userId: string): Promise<void> {
     paymentMethod: o.payment_method,
     origin: o.origin,
     movementId,
+    business: o.warehouse_store,
     date: new Date().toISOString().slice(0, 10),
     userId,
   });

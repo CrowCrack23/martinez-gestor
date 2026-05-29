@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Pencil, Plus } from "lucide-react";
 import { listWarehouses, WAREHOUSE_TYPE_LABEL } from "@/lib/warehouses";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, businessScope } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
@@ -9,8 +9,8 @@ import { Flash } from "@/components/flash";
 type SP = Promise<{ success?: string; error?: string }>;
 
 export default async function AlmacenesPage({ searchParams }: { searchParams: SP }) {
-  await requirePermission("almacenes");
-  const [warehouses, sp] = await Promise.all([listWarehouses(), searchParams]);
+  const user = await requirePermission("almacenes");
+  const [warehouses, sp] = await Promise.all([listWarehouses(businessScope(user)), searchParams]);
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

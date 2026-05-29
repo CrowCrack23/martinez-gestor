@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requireRole, businessScope } from "@/lib/auth";
 import { listCustomers } from "@/lib/customers";
 import { listWarehouses } from "@/lib/warehouses";
 import { listProductsLite } from "@/lib/products-lite";
@@ -19,9 +19,10 @@ import { createOrderAction } from "../actions";
 type SP = Promise<{ error?: string }>;
 
 export default async function NuevaVentaPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "vendedor"]);
+  const user = await requireRole(["admin", "vendedor"]);
+  const scope = businessScope(user);
   const [customers, warehouses, products, sp] = await Promise.all([
-    listCustomers(), listWarehouses(), listProductsLite(), searchParams,
+    listCustomers(), listWarehouses(scope), listProductsLite(scope), searchParams,
   ]);
   const activeWarehouses = warehouses.filter((w) => w.active);
   const activeCustomers = customers.filter((c) => c.active);

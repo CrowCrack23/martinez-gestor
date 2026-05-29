@@ -91,6 +91,7 @@ export async function generatePurchaseEntry(input: {
   code: string;
   supplierName: string;
   total: number;
+  business: string | null;
   date: string;
   userId: string | null;
 }): Promise<void> {
@@ -108,6 +109,7 @@ export async function generatePurchaseEntry(input: {
       description: `Compra ${input.code} — ${input.supplierName}`,
       reference_type: "compra",
       reference_id: input.purchaseId,
+      business: input.business,
       created_by: input.userId,
       lines,
     });
@@ -129,6 +131,7 @@ export async function generateSaleEntry(input: {
   paymentMethod: PaymentMethod;
   origin: OrderOrigin;
   movementId: string | null;
+  business: string | null;
   date: string;
   userId: string | null;
 }): Promise<void> {
@@ -160,6 +163,7 @@ export async function generateSaleEntry(input: {
       description: `Venta ${input.code}${who}`,
       reference_type: "venta",
       reference_id: input.orderId,
+      business: input.business,
       created_by: input.userId,
       lines,
     });

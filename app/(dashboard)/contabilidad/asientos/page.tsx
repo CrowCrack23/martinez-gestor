@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, businessScope } from "@/lib/auth";
 import { listJournalEntries, JOURNAL_STATUS_BADGE, JOURNAL_STATUS_LABEL } from "@/lib/accounting";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,9 +11,9 @@ import type { JournalEntryStatus } from "@/lib/supabase-types";
 type SP = Promise<{ status?: JournalEntryStatus; success?: string; error?: string }>;
 
 export default async function AsientosPage({ searchParams }: { searchParams: SP }) {
-  await requirePermission("contabilidad");
+  const user = await requirePermission("contabilidad");
   const sp = await searchParams;
-  const entries = await listJournalEntries({ status: sp.status });
+  const entries = await listJournalEntries({ status: sp.status, scope: businessScope(user) });
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

@@ -11,12 +11,14 @@ export type ProductLite = {
 };
 
 export const listProductsLite = unstable_cache(
-  async (): Promise<ProductLite[]> => {
+  async (scope?: string[]): Promise<ProductLite[]> => {
     const sb = getSupabase();
-    const { data, error } = await sb
+    let q = sb
       .from("products")
       .select("id,name,store,category,price")
       .order("name", { ascending: true });
+    if (scope) q = q.in("store", scope);
+    const { data, error } = await q;
     if (error) throw error;
     return (data ?? []).map((p) => ({
       id: p.id,

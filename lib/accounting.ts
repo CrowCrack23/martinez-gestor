@@ -53,12 +53,14 @@ export type JournalLineInput = { account_id: string; debit: number; credit: numb
 export type JournalEntrySummary = JournalEntry & { line_count: number };
 
 export const listJournalEntries = unstable_cache(
-  async (filter?: { status?: JournalEntryStatus; from?: string; to?: string }): Promise<JournalEntrySummary[]> => {
+  async (filter?: { status?: JournalEntryStatus; from?: string; to?: string; scope?: string[] }): Promise<JournalEntrySummary[]> => {
     const sb = getSupabase();
     let q = sb.from("journal_entries").select("*, journal_lines(id)").order("entry_date", { ascending: false }).order("created_at", { ascending: false });
     if (filter?.status) q = q.eq("status", filter.status);
     if (filter?.from) q = q.gte("entry_date", filter.from);
     if (filter?.to) q = q.lte("entry_date", filter.to);
+    // scope: limitar a asientos del/los negocio(s) del usuario.
+    if (filter?.scope) q = q.in("business", filter.scope);
     const { data, error } = await q;
     if (error) throw error;
     type R = JournalEntry & { journal_lines: { id: string }[] | null };
@@ -76,11 +78,12 @@ export type JournalEntryDetail = JournalEntry & {
   lines: (JournalLine & { account_code: string; account_name: string })[];
 };
 
-export async function getJournalEntry(id: string): Promise<JournalEntryDetail | null> {
+export async function getJournalEntry(id: string, scope?: string[]): Promise<JournalEntryDetail | null> {
   const sb = getSupabase();
   const { data, error } = await sb.from("journal_entries").select("*").eq("id", id).maybeSingle();
   if (error) throw error;
   if (!data) return null;
+  if (scope && (!data.business || !scope.includes(data.business))) return null;
   const { data: rawLines, error: lErr } = await sb
     .from("journal_lines")
     .select("*, accounts!inner(code, name)")
@@ -105,6 +108,7 @@ export async function getJournalEntry(id: string): Promise<JournalEntryDetail | 
 
 export async function createJournalEntry(input: {
   entry_date: string; description: string; reference_type?: string; reference_id?: string | null;
+  business?: string | null;
   created_by: string | null;
   lines: JournalLineInput[];
 }): Promise<string> {
@@ -120,6 +124,7 @@ export async function createJournalEntry(input: {
     description: input.description,
     reference_type: input.reference_type ?? "manual",
     reference_id: input.reference_id ?? null,
+    business: input.business ?? null,
     created_by: input.created_by,
   }).select("id").single();
   if (error) throw error;
@@ -195,13 +200,14 @@ export type TrialBalanceRow = {
   debit: number; credit: number; balance: number;
 };
 
-export async function trialBalance(opts?: { from?: string; to?: string; postedOnly?: boolean }): Promise<TrialBalanceRow[]> {
+export async function trialBalance(opts?: { from?: string; to?: string; postedOnly?: boolean; scope?: string[] }): Promise<TrialBalanceRow[]> {
   const sb = getSupabase();
   let q = sb.from("journal_lines")
-    .select("debit,credit,account_id,journal_entries!inner(entry_date,status), accounts!inner(code,name,type)");
+    .select("debit,credit,account_id,journal_entries!inner(entry_date,status,business), accounts!inner(code,name,type)");
   if (opts?.postedOnly) q = q.eq("journal_entries.status", "contabilizada");
   if (opts?.from) q = q.gte("journal_entries.entry_date", opts.from);
   if (opts?.to) q = q.lte("journal_entries.entry_date", opts.to);
+  if (opts?.scope) q = q.in("journal_entries.business", opts.scope);
   const { data, error } = await q;
   if (error) throw error;
   type Row = {

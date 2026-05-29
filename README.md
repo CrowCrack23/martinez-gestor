@@ -69,15 +69,25 @@ pnpm dev
 
 Entra a `http://localhost:3000` → te redirige a `/login`.
 
-## Roles disponibles
+## Acceso: roles + negocios
 
-| Rol          | Acceso                                             |
-| ------------ | -------------------------------------------------- |
-| `admin`      | Total (incluye usuarios y borrado de almacenes)    |
-| `almacenero` | Almacenes, inventario, movimientos                 |
-| `vendedor`   | Solo lectura de inventario                         |
-| `contador`   | (reservado para módulo de contabilidad)            |
-| `rrhh`       | (reservado para módulo de RRHH)                    |
+Dos dimensiones independientes (ver `lib/permissions.ts` y `lib/auth.ts`):
+
+1. **Rol → permisos por módulo** (matriz única en `lib/permissions.ts`; `admin = "*"`):
+
+| Rol          | Módulos                                                              |
+| ------------ | ------------------------------------------------------------------- |
+| `admin`      | Todo (+ usuarios, asistente IA, borrados)                           |
+| `almacenero` | Productos, inventario, movimientos, lotes, almacenes, proveedores, compras, recetas, producción |
+| `vendedor`   | Inventario, ventas, clientes, remesas                              |
+| `contador`   | Lotes, proveedores, compras, ventas, clientes, nómina, remesas, contabilidad |
+| `rrhh`       | Empleados, asistencia, nómina                                       |
+
+2. **Negocio (tienda)** — `user_businesses` asigna tiendas a cada usuario; sus datos de
+   ventas/inventario/compras/contabilidad se filtran a ellas. `admin` ve todos. Las remesas
+   no se filtran por negocio. Se asigna en `/usuarios`.
+
+Para cambiar qué módulos ve un rol, edita SOLO `ROLE_PERMISSIONS` en `lib/permissions.ts`.
 
 ## Estructura
 
@@ -134,17 +144,29 @@ proxy.ts                         # gate de auth (todas las rutas excepto /login)
 | Producción | `/recetas` (BOM), `/produccion` | 0009 |
 | Remesas | `/remesas`, `/remesas/tasas` | 0010 |
 | Contabilidad | `/contabilidad/cuentas`, `/contabilidad/asientos`, `/contabilidad/balance` | 0011 |
+| Productos (catálogo) | `/productos` | 0014 |
+| Costeo FIFO / lotes | `/inventario/lotes` | 0012 |
+| Asistente IA (solo admin) | `/asistente` | — (Mastra) |
 
 ### Flujos automáticos
 
-- **Compra recibida** → movimiento `entrada` automático en almacén destino.
-- **Venta confirmada** → movimiento `salida` automático del almacén origen.
+- **Compra recibida** → movimiento `entrada` + asiento contable borrador (Inventario / CxP).
+- **Venta confirmada** → movimiento `salida` + asiento (Caja|CxC / Ventas + COGS).
 - **Producción** → `salida` de insumos + `entrada` del producto terminado en el mismo almacén.
-- **Asistencia + nómina** → cálculo automático de bruto proporcional a días trabajados al crear el período.
+- **Asistencia + nómina** → bruto proporcional a días trabajados al crear el período; al cerrar genera asiento.
+- **Costeo FIFO** centralizado en `createMovement`: cada salida consume lotes y registra COGS real.
+
+### Asistente IA (Mastra, solo admin, solo lectura)
+
+Chat en `/asistente` que consulta los datos reales del ERP vía 15 tools (ventas, inventario,
+compras, contabilidad, remesas, RRHH, producción…) + guía de navegación. Multi-proveedor:
+**OpenAI / Anthropic / Google** (se elige en la UI). Configura al menos una API key en
+`.env.local` (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY`).
+⚠️ OpenAI y Google bloquean IPs cubanas — el servidor debe estar fuera de Cuba.
 
 ### Pendientes / próximas iteraciones
 
-- Integración automática **contabilidad ↔ compras/ventas/nómina/remesas** (hoy los asientos son manuales).
-- Reportes: P&L, estado de resultados, top SKUs por revenue.
+- **Fase 2 del asistente:** tools de escritura con confirmación humana (crear borradores, recibir/confirmar).
+- Reportes: P&L, ventas por negocio, top SKUs, rotación, márgenes.
 - POS optimizado con búsqueda por código de barras.
 - Multimoneda formal (hoy todo CUP excepto remesas USD).

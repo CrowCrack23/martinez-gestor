@@ -27,6 +27,7 @@ export type PayrollStatus = "borrador" | "cerrada";
 export type ProductionStatus = "borrador" | "producida" | "cancelada";
 export type RemittanceStatus = "pendiente" | "entregada" | "cancelada";
 export type RemittancePayoutMethod = "efectivo" | "tarjeta_cup" | "transferencia" | "otro";
+export type RemittanceOrigin = "eeuu" | "europa";
 export type AccountType = "activo" | "pasivo" | "patrimonio" | "ingreso" | "gasto";
 export type JournalEntryStatus = "borrador" | "contabilizada";
 
@@ -153,6 +154,16 @@ export type Database = {
           created_at: string;
         };
         Insert: { user_id: string; role_id: string };
+        Update: never;
+        Relationships: [];
+      };
+      user_businesses: {
+        Row: {
+          user_id: string;
+          store_slug: string;
+          created_at: string;
+        };
+        Insert: { user_id: string; store_slug: string };
         Update: never;
         Relationships: [];
       };
@@ -480,7 +491,7 @@ export type Database = {
           document_id: string; phone: string; email: string; address: string;
           hire_date: string | null; termination_date: string | null;
           position_id: string | null; warehouse_id: string | null; app_user_id: string | null;
-          monthly_salary: number; active: boolean; notes: string;
+          monthly_salary: number; commission_rate: number; active: boolean; notes: string;
           created_at: string; updated_at: string;
         };
         Insert: {
@@ -489,7 +500,7 @@ export type Database = {
           document_id?: string; phone?: string; email?: string; address?: string;
           hire_date?: string | null; termination_date?: string | null;
           position_id?: string | null; warehouse_id?: string | null; app_user_id?: string | null;
-          monthly_salary?: number; active?: boolean; notes?: string;
+          monthly_salary?: number; commission_rate?: number; active?: boolean; notes?: string;
         };
         Update: Partial<Database["public"]["Tables"]["employees"]["Insert"]>;
         Relationships: [];
@@ -521,15 +532,18 @@ export type Database = {
         Row: {
           id: string; payroll_run_id: string; employee_id: string;
           base_salary: number; days_worked: number; days_in_period: number;
+          sales_base: number; commission: number;
           gross: number; deductions: number; net: number; notes: string;
         };
         Insert: {
           id?: string; payroll_run_id: string; employee_id: string;
           base_salary?: number; days_worked?: number; days_in_period?: number;
+          sales_base?: number; commission?: number;
           gross?: number; deductions?: number; net?: number; notes?: string;
         };
         Update: {
           base_salary?: number; days_worked?: number; days_in_period?: number;
+          sales_base?: number; commission?: number;
           gross?: number; deductions?: number; net?: number; notes?: string;
         };
         Relationships: [];
@@ -594,13 +608,14 @@ export type Database = {
           id: string; code: string; entry_date: string;
           description: string; reference_type: string; reference_id: string | null;
           total_debit: number; total_credit: number;
-          status: JournalEntryStatus;
+          status: JournalEntryStatus; business: string | null;
           created_by: string | null; posted_by: string | null; posted_at: string | null;
           created_at: string; updated_at: string;
         };
         Insert: {
           id?: string; code?: string; entry_date?: string;
           description?: string; reference_type?: string; reference_id?: string | null;
+          business?: string | null;
           created_by?: string | null;
         };
         Update: {
@@ -640,6 +655,7 @@ export type Database = {
           beneficiary_doc: string; beneficiary_address: string;
           amount_usd: number; exchange_rate: number; amount_cup: number;
           commission_usd: number;
+          origin: RemittanceOrigin;
           payout_method: RemittancePayoutMethod;
           status: RemittanceStatus;
           notes: string;
@@ -653,6 +669,7 @@ export type Database = {
           beneficiary_doc?: string; beneficiary_address?: string;
           amount_usd: number; exchange_rate: number;
           commission_usd?: number;
+          origin?: RemittanceOrigin;
           payout_method?: RemittancePayoutMethod;
           notes?: string;
           created_by?: string | null;
@@ -663,6 +680,7 @@ export type Database = {
           beneficiary_doc?: string; beneficiary_address?: string;
           amount_usd?: number; exchange_rate?: number;
           commission_usd?: number;
+          origin?: RemittanceOrigin;
           payout_method?: RemittancePayoutMethod;
           status?: RemittanceStatus;
           notes?: string;

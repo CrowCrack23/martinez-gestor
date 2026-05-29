@@ -31,13 +31,14 @@ export type ProductRow = {
 export type ProductListRow = ProductRow & { stock_total: number };
 
 export const listCatalog = unstable_cache(
-  async (filter?: { store?: string }): Promise<ProductRow[]> => {
+  async (filter?: { store?: string; scope?: string[] }): Promise<ProductRow[]> => {
     const sb = getSupabase();
     let q = sb
       .from("products")
       .select("id,name,description,price,old_price,image,category,store,shipping_time,featured,is_new,online_visible")
       .order("name");
     if (filter?.store) q = q.eq("store", filter.store);
+    if (filter?.scope) q = q.in("store", filter.scope);
     const { data, error } = await q;
     if (error) throw error;
     return (data ?? []).map((p) => ({ ...p, price: Number(p.price), old_price: p.old_price != null ? Number(p.old_price) : null }));

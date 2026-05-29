@@ -1,4 +1,4 @@
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, businessScope } from "@/lib/auth";
 import { trialBalance, ACCOUNT_TYPE_LABEL } from "@/lib/accounting";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,10 +10,10 @@ import type { AccountType } from "@/lib/supabase-types";
 type SP = Promise<{ from?: string; to?: string; posted?: string }>;
 
 export default async function BalancePage({ searchParams }: { searchParams: SP }) {
-  await requirePermission("contabilidad");
+  const user = await requirePermission("contabilidad");
   const sp = await searchParams;
   const postedOnly = sp.posted !== "0";
-  const rows = await trialBalance({ from: sp.from, to: sp.to, postedOnly });
+  const rows = await trialBalance({ from: sp.from, to: sp.to, postedOnly, scope: businessScope(user) });
 
   const groups: Record<AccountType, typeof rows> = {
     activo: [], pasivo: [], patrimonio: [], ingreso: [], gasto: [],

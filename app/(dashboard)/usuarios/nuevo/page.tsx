@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth";
 import { listRoles } from "@/lib/users";
+import { listStoresLite } from "@/lib/stores-lite";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +13,7 @@ type SP = Promise<{ error?: string }>;
 
 export default async function NuevoUsuarioPage({ searchParams }: { searchParams: SP }) {
   await requirePermission("usuarios");
-  const [roles, sp] = await Promise.all([listRoles(), searchParams]);
+  const [roles, stores, sp] = await Promise.all([listRoles(), listStoresLite(), searchParams]);
   return (
     <div className="max-w-xl space-y-6">
       <h1 className="text-2xl font-semibold">Nuevo usuario</h1>
@@ -43,6 +44,18 @@ export default async function NuevoUsuarioPage({ searchParams }: { searchParams:
                       <div className="font-medium">{r.name}</div>
                       <div className="text-xs text-muted-foreground">{r.description}</div>
                     </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Negocios</Label>
+              <p className="text-xs text-muted-foreground">Tiendas cuyos datos (ventas, inventario, compras, contabilidad) podrá ver. El rol Administrador ve todos.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {stores.map((s) => (
+                  <label key={s.slug} className="flex items-center gap-2 p-2 border rounded-md text-sm hover:bg-muted/30 cursor-pointer">
+                    <input type="checkbox" name="businesses" value={s.slug} className="size-4" />
+                    <span className="font-medium">{s.label}</span>
                   </label>
                 ))}
               </div>

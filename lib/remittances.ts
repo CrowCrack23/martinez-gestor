@@ -2,7 +2,7 @@ import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { generateRemittanceEntry } from "./auto-accounting";
-import type { Database, RemittanceStatus, RemittancePayoutMethod } from "./supabase-types";
+import type { Database, RemittanceStatus, RemittancePayoutMethod, RemittanceOrigin } from "./supabase-types";
 
 const TAG = "remittances";
 const TAG_RATES = "exchange_rates";
@@ -13,10 +13,11 @@ export type Remittance = Database["public"]["Tables"]["remittance_operations"]["
 export type ExchangeRate = Database["public"]["Tables"]["exchange_rates"]["Row"];
 
 export const listRemittances = unstable_cache(
-  async (filter?: { status?: RemittanceStatus }): Promise<Remittance[]> => {
+  async (filter?: { status?: RemittanceStatus; origin?: RemittanceOrigin }): Promise<Remittance[]> => {
     const sb = getSupabase();
     let q = sb.from("remittance_operations").select("*").order("created_at", { ascending: false });
     if (filter?.status) q = q.eq("status", filter.status);
+    if (filter?.origin) q = q.eq("origin", filter.origin);
     const { data, error } = await q;
     if (error) throw error;
     return (data ?? []).map((r) => ({
@@ -51,6 +52,7 @@ export async function createRemittance(input: {
   sender_name: string; sender_phone: string;
   beneficiary_name: string; beneficiary_phone: string; beneficiary_doc: string; beneficiary_address: string;
   amount_usd: number; exchange_rate: number; commission_usd: number;
+  origin: RemittanceOrigin;
   payout_method: RemittancePayoutMethod;
   notes: string;
   created_by: string | null;
@@ -167,3 +169,20 @@ export const REM_PAYOUT_LABEL: Record<RemittancePayoutMethod, string> = {
   transferencia: "Transferencia",
   otro: "Otro",
 };
+
+// ── Origen ─────────────────────────────────────────────────────────────────
+// El monto enviado y la comisión están en la moneda del origen.
+
+export const REM_ORIGIN_LABEL: Record<RemittanceOrigin, string> = {
+  eeuu: "Estados Unidos",
+  europa: "Europa",
+};
+
+export const REM_ORIGIN_CURRENCY: Record<RemittanceOrigin, string> = {
+  eeuu: "USD",
+  europa: "EUR",
+};
+
+export function remittanceCurrency(origin: RemittanceOrigin): string {
+  return REM_ORIGIN_CURRENCY[origin];
+}

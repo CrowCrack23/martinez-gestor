@@ -31,6 +31,7 @@ export const PERMISSIONS = [
   "remesas",
   "contabilidad",
   "usuarios",
+  "asistente",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

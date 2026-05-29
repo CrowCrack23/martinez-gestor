@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, businessScope } from "@/lib/auth";
 import {
   getOrder, ORDER_STATUS_BADGE, ORDER_STATUS_LABEL, ORDER_ORIGIN_LABEL, PAYMENT_METHOD_LABEL,
 } from "@/lib/sales";
@@ -24,9 +24,10 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ error?: string; success?: string }>;
 
 export default async function VentaDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  await requirePermission("ventas");
+  const user = await requirePermission("ventas");
+  const scope = businessScope(user);
   const { id } = await params;
-  const [o, sp] = await Promise.all([getOrder(id), searchParams]);
+  const [o, sp] = await Promise.all([getOrder(id, scope), searchParams]);
   if (!o) notFound();
   const editable = o.status === "borrador";
   const update = updateOrderAction.bind(null, o.id);
@@ -100,7 +101,7 @@ export default async function VentaDetallePage({ params, searchParams }: { param
 
   // Editable (borrador)
   const [customers, warehouses, products] = await Promise.all([
-    listCustomers(), listWarehouses(), listProductsLite(),
+    listCustomers(), listWarehouses(scope), listProductsLite(scope),
   ]);
   const activeCustomers = customers.filter((c) => c.active || c.id === o.customer_id);
   const activeWarehouses = warehouses.filter((w) => w.active || w.id === o.warehouse_id);

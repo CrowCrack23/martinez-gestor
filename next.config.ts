@@ -26,6 +26,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Mastra y sus deps deben quedar fuera del bundle del servidor (usan APIs de
+  // Node y módulos que no se deben empaquetar).
+  serverExternalPackages: ["@mastra/core", "@mastra/loggers"],
   images: {
     remotePatterns: [
       ...(supabaseHost

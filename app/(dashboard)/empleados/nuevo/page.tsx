@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth";
 import { listPositions } from "@/lib/hr";
 import { listWarehouses } from "@/lib/warehouses";
+import { listUsers } from "@/lib/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,7 @@ type SP = Promise<{ error?: string }>;
 
 export default async function NuevoEmpleadoPage({ searchParams }: { searchParams: SP }) {
   await requirePermission("empleados");
-  const [positions, warehouses, sp] = await Promise.all([listPositions(), listWarehouses(), searchParams]);
+  const [positions, warehouses, users, sp] = await Promise.all([listPositions(), listWarehouses(), listUsers(), searchParams]);
   return (
     <div className="max-w-xl space-y-6">
       <h1 className="text-2xl font-semibold">Nuevo empleado</h1>
@@ -53,7 +54,22 @@ export default async function NuevoEmpleadoPage({ searchParams }: { searchParams
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2"><Label htmlFor="hire_date">Fecha ingreso</Label><Input id="hire_date" name="hire_date" type="date" /></div>
-              <div className="space-y-2"><Label htmlFor="monthly_salary">Salario mensual</Label><Input id="monthly_salary" name="monthly_salary" type="number" step="0.01" min={0} defaultValue="0" /></div>
+              <div className="space-y-2"><Label htmlFor="monthly_salary">Salario base mensual</Label><Input id="monthly_salary" name="monthly_salary" type="number" step="0.01" min={0} defaultValue="0" /></div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="commission_rate">Comisión (%)</Label>
+                <Input id="commission_rate" name="commission_rate" type="number" step="0.01" min={0} max={100} defaultValue="0" />
+                <p className="text-xs text-muted-foreground">% sobre las ventas que confirme su usuario. 0 = sin comisión.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="app_user_id">Usuario enlazado</Label>
+                <Select id="app_user_id" name="app_user_id" defaultValue="">
+                  <option value="">— Ninguno —</option>
+                  {users.map((u) => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
+                </Select>
+                <p className="text-xs text-muted-foreground">Necesario para atribuirle ventas (comisión).</p>
+              </div>
             </div>
             <div className="space-y-2"><Label htmlFor="address">Dirección</Label><Textarea id="address" name="address" rows={2} /></div>
             <div className="space-y-2"><Label htmlFor="notes">Notas</Label><Textarea id="notes" name="notes" rows={2} /></div>

@@ -16,6 +16,7 @@ export type AppUserWithRoles = {
   active: boolean;
   created_at: string;
   roles: string[];
+  businesses: string[];
 };
 
 export type Role = { id: string; name: string; description: string };
@@ -46,20 +47,28 @@ export const listUsers = unstable_cache(
       .order("created_at", { ascending: false });
     if (error) throw error;
     if (!users || users.length === 0) return [];
-    const { data: roles } = await sb
-      .from("user_roles")
-      .select("user_id,role_id")
-      .in(
-        "user_id",
-        users.map((u) => u.id),
-      );
-    const byUser = new Map<string, string[]>();
+    const ids = users.map((u) => u.id);
+    const [{ data: roles }, { data: biz }] = await Promise.all([
+      sb.from("user_roles").select("user_id,role_id").in("user_id", ids),
+      sb.from("user_businesses").select("user_id,store_slug").in("user_id", ids),
+    ]);
+    const rolesByUser = new Map<string, string[]>();
     for (const r of roles ?? []) {
-      const arr = byUser.get(r.user_id) ?? [];
+      const arr = rolesByUser.get(r.user_id) ?? [];
       arr.push(r.role_id);
-      byUser.set(r.user_id, arr);
+      rolesByUser.set(r.user_id, arr);
     }
-    return users.map((u) => ({ ...u, roles: byUser.get(u.id) ?? [] }));
+    const bizByUser = new Map<string, string[]>();
+    for (const b of biz ?? []) {
+      const arr = bizByUser.get(b.user_id) ?? [];
+      arr.push(b.store_slug);
+      bizByUser.set(b.user_id, arr);
+    }
+    return users.map((u) => ({
+      ...u,
+      roles: rolesByUser.get(u.id) ?? [],
+      businesses: bizByUser.get(u.id) ?? [],
+    }));
   },
   ["users_all"],
   { revalidate: 30, tags: [TAG] },
@@ -70,6 +79,7 @@ export async function createUser(input: {
   password: string;
   full_name: string;
   roles: string[];
+  businesses: string[];
 }): Promise<string> {
   const sb = getSupabase();
   const { data, error } = await sb
@@ -88,13 +98,18 @@ export async function createUser(input: {
     const { error: rErr } = await sb.from("user_roles").insert(rows);
     if (rErr) throw rErr;
   }
+  if (input.businesses.length > 0) {
+    const rows = input.businesses.map((store_slug) => ({ user_id: data.id, store_slug }));
+    const { error: bErr } = await sb.from("user_businesses").insert(rows);
+    if (bErr) throw bErr;
+  }
   bust();
   return data.id;
 }
 
 export async function updateUser(
   id: string,
-  patch: { full_name?: string; active?: boolean; password?: string; roles?: string[] },
+  patch: { full_name?: string; active?: boolean; password?: string; roles?: string[]; businesses?: string[] },
 ): Promise<void> {
   const sb = getSupabase();
   const userPatch: { full_name?: string; active?: boolean; password_hash?: string } = {};
@@ -111,6 +126,14 @@ export async function updateUser(
       const rows = patch.roles.map((role_id) => ({ user_id: id, role_id }));
       const { error: rErr } = await sb.from("user_roles").insert(rows);
       if (rErr) throw rErr;
+    }
+  }
+  if (patch.businesses) {
+    await sb.from("user_businesses").delete().eq("user_id", id);
+    if (patch.businesses.length > 0) {
+      const rows = patch.businesses.map((store_slug) => ({ user_id: id, store_slug }));
+      const { error: bErr } = await sb.from("user_businesses").insert(rows);
+      if (bErr) throw bErr;
     }
   }
   bust();

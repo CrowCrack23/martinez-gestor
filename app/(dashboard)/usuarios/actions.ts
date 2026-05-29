@@ -8,6 +8,10 @@ function parseRoles(form: FormData): string[] {
   return form.getAll("roles").map((v) => String(v)).filter(Boolean);
 }
 
+function parseBusinesses(form: FormData): string[] {
+  return form.getAll("businesses").map((v) => String(v)).filter(Boolean);
+}
+
 export async function createUserAction(formData: FormData) {
   await requireRole(["admin"]);
   try {
@@ -18,6 +22,7 @@ export async function createUserAction(formData: FormData) {
       password,
       full_name: optionalString(formData, "full_name"),
       roles: parseRoles(formData),
+      businesses: parseBusinesses(formData),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";
@@ -36,6 +41,7 @@ export async function updateUserAction(id: string, formData: FormData) {
       active: formData.get("active") === "on",
       password: newPwd || undefined,
       roles: parseRoles(formData),
+      businesses: parseBusinesses(formData),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";

@@ -44,15 +44,16 @@ type PORawRow = {
 };
 
 export const listPurchaseOrders = unstable_cache(
-  async (filter?: { status?: PurchaseOrderStatus }): Promise<PurchaseOrderSummary[]> => {
+  async (filter?: { status?: PurchaseOrderStatus; scope?: string[] }): Promise<PurchaseOrderSummary[]> => {
     const sb = getSupabase();
     let q = sb
       .from("purchase_orders")
       .select(
-        "id,code,status,supplier_id,warehouse_id,reference,total_amount,created_at,received_at,suppliers!inner(name),warehouses!inner(name),purchase_order_lines(id)",
+        "id,code,status,supplier_id,warehouse_id,reference,total_amount,created_at,received_at,suppliers!inner(name),warehouses!inner(name,store_slug),purchase_order_lines(id)",
       )
       .order("created_at", { ascending: false });
     if (filter?.status) q = q.eq("status", filter.status);
+    if (filter?.scope) q = q.in("warehouses.store_slug", filter.scope);
     const { data, error } = await q;
     if (error) throw error;
     const rows = (data ?? []) as unknown as PORawRow[];
@@ -93,6 +94,7 @@ export type PurchaseOrderDetail = {
   supplier_name: string;
   warehouse_id: string;
   warehouse_name: string;
+  warehouse_store: string | null;
   reference: string;
   notes: string;
   total_amount: number;
@@ -102,17 +104,19 @@ export type PurchaseOrderDetail = {
   lines: PurchaseLine[];
 };
 
-export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail | null> {
+export async function getPurchaseOrder(id: string, scope?: string[]): Promise<PurchaseOrderDetail | null> {
   const sb = getSupabase();
   const { data, error } = await sb
     .from("purchase_orders")
     .select(
-      "id,code,status,supplier_id,warehouse_id,reference,notes,total_amount,created_at,received_at,movement_id,suppliers!inner(name),warehouses!inner(name)",
+      "id,code,status,supplier_id,warehouse_id,reference,notes,total_amount,created_at,received_at,movement_id,suppliers!inner(name),warehouses!inner(name,store_slug)",
     )
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
+  const wStore = (data as unknown as { warehouses: { store_slug: string | null } | null }).warehouses?.store_slug ?? null;
+  if (scope && (!wStore || !scope.includes(wStore))) return null;
 
   const { data: rawLines, error: lErr } = await sb
     .from("purchase_order_lines")
@@ -153,7 +157,7 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
     received_at: string | null;
     movement_id: string | null;
     suppliers: { name: string } | null;
-    warehouses: { name: string } | null;
+    warehouses: { name: string; store_slug: string | null } | null;
   };
 
   return {
@@ -164,6 +168,7 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
     supplier_name: d.suppliers?.name ?? "",
     warehouse_id: d.warehouse_id,
     warehouse_name: d.warehouses?.name ?? "",
+    warehouse_store: d.warehouses?.store_slug ?? null,
     reference: d.reference,
     notes: d.notes,
     total_amount: Number(d.total_amount),
@@ -280,6 +285,7 @@ export async function receivePurchaseOrder(id: string, userId: string): Promise<
     code: po.code,
     supplierName: po.supplier_name,
     total: po.total_amount,
+    business: po.warehouse_store,
     date: new Date().toISOString().slice(0, 10),
     userId,
   });

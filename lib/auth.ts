@@ -18,7 +18,20 @@ export type CurrentUser = {
   email: string;
   fullName: string;
   roles: string[];
+  /** Tiendas (negocios) a las que el usuario está asignado. */
+  businesses: string[];
+  /** true si ve todos los negocios (rol admin). */
+  allBusinesses: boolean;
 };
+
+/**
+ * Alcance de negocios para filtrar consultas:
+ *  - undefined → sin límite (admin, ve todo)
+ *  - string[]  → limitar a esas tiendas (puede ser [] = no ve nada)
+ */
+export function businessScope(user: CurrentUser): string[] | undefined {
+  return user.allBusinesses ? undefined : user.businesses;
+}
 
 function parseHash(raw: string): { salt: Buffer; hash: Buffer } | null {
   const [saltHex, hashHex] = raw.split(":");
@@ -50,15 +63,18 @@ const loadUser = unstable_cache(
       .eq("id", userId)
       .maybeSingle();
     if (error || !u || !u.active) return null;
-    const { data: rs } = await sb
-      .from("user_roles")
-      .select("role_id")
-      .eq("user_id", userId);
+    const [{ data: rs }, { data: bs }] = await Promise.all([
+      sb.from("user_roles").select("role_id").eq("user_id", userId),
+      sb.from("user_businesses").select("store_slug").eq("user_id", userId),
+    ]);
+    const roles = (rs ?? []).map((r) => r.role_id);
     return {
       id: u.id,
       email: u.email,
       fullName: u.full_name,
-      roles: (rs ?? []).map((r) => r.role_id),
+      roles,
+      businesses: (bs ?? []).map((b) => b.store_slug),
+      allBusinesses: roles.includes("admin"),
     };
   },
   ["app_user_with_roles"],
@@ -120,10 +136,11 @@ export async function signIn(email: string, password: string): Promise<CurrentUs
   if (!verifyPasswordAgainstHash(password, u.password_hash)) {
     throw new Error("Credenciales inválidas.");
   }
-  const { data: rs } = await sb
-    .from("user_roles")
-    .select("role_id")
-    .eq("user_id", u.id);
+  const [{ data: rs }, { data: bs }] = await Promise.all([
+    sb.from("user_roles").select("role_id").eq("user_id", u.id),
+    sb.from("user_businesses").select("store_slug").eq("user_id", u.id),
+  ]);
+  const roles = (rs ?? []).map((r) => r.role_id);
 
   const token = await createSessionToken(u.id, getSessionSecret());
   const jar = await cookies();
@@ -139,7 +156,9 @@ export async function signIn(email: string, password: string): Promise<CurrentUs
     id: u.id,
     email: u.email,
     fullName: u.full_name,
-    roles: (rs ?? []).map((r) => r.role_id),
+    roles,
+    businesses: (bs ?? []).map((b) => b.store_slug),
+    allBusinesses: roles.includes("admin"),
   };
 }
 

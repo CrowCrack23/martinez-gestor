@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requireRole, businessScope } from "@/lib/auth";
 import { listSuppliers } from "@/lib/suppliers";
 import { listWarehouses } from "@/lib/warehouses";
 import { listProductsLite } from "@/lib/products-lite";
@@ -16,11 +16,12 @@ import { createPurchaseOrderAction } from "../actions";
 type SP = Promise<{ error?: string }>;
 
 export default async function NuevaCompraPage({ searchParams }: { searchParams: SP }) {
-  await requireRole(["admin", "almacenero"]);
+  const user = await requireRole(["admin", "almacenero"]);
+  const scope = businessScope(user);
   const [suppliers, warehouses, products, sp] = await Promise.all([
     listSuppliers(),
-    listWarehouses(),
-    listProductsLite(),
+    listWarehouses(scope),
+    listProductsLite(scope),
     searchParams,
   ]);
   const activeSuppliers = suppliers.filter((s) => s.active);

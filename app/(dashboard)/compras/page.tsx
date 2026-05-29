@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, businessScope } from "@/lib/auth";
 import { listPurchaseOrders, STATUS_BADGE, STATUS_LABEL } from "@/lib/purchases";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,10 +11,9 @@ import type { PurchaseOrderStatus } from "@/lib/supabase-types";
 type SP = Promise<{ status?: PurchaseOrderStatus; success?: string; error?: string }>;
 
 export default async function ComprasPage({ searchParams }: { searchParams: SP }) {
-  await requirePermission("compras");
+  const user = await requirePermission("compras");
   const sp = await searchParams;
-  const filter = sp.status ? { status: sp.status } : undefined;
-  const orders = await listPurchaseOrders(filter);
+  const orders = await listPurchaseOrders({ status: sp.status, scope: businessScope(user) });
 
   return (
     <div className="space-y-6">

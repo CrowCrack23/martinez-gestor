@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, businessScope } from "@/lib/auth";
 import { listStock } from "@/lib/inventory";
 import { stockValuation } from "@/lib/costing";
 import { listWarehouses } from "@/lib/warehouses";
@@ -13,16 +13,18 @@ import { Flash } from "@/components/flash";
 type SP = Promise<{ warehouse?: string; store?: string; low?: string; success?: string; error?: string }>;
 
 export default async function InventarioPage({ searchParams }: { searchParams: SP }) {
-  await requirePermission("inventario");
+  const user = await requirePermission("inventario");
+  const scope = businessScope(user);
   const sp = await searchParams;
   const filter = {
     warehouseId: sp.warehouse || undefined,
     store: sp.store || undefined,
     lowOnly: sp.low === "1",
+    scope,
   };
   const [rows, warehouses, stores, valuation] = await Promise.all([
     listStock(filter),
-    listWarehouses(),
+    listWarehouses(scope),
     listStoresLite(),
     stockValuation(),
   ]);

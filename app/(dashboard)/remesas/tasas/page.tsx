@@ -4,6 +4,7 @@ import { listExchangeRates } from "@/lib/remittances";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
 import { deleteExchangeRateAction, upsertExchangeRateAction } from "../actions";
@@ -23,21 +24,24 @@ export default async function TasasPage({ searchParams }: { searchParams: SP }) 
     <div className="max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Tasas de cambio</h1>
-        <p className="text-sm text-muted-foreground">Registro diario de la tasa USD→CUP usada en remesas.</p>
+        <p className="text-sm text-muted-foreground">Registro diario de las tasas a CUP usadas en remesas: USD→CUP (Estados Unidos) y EUR→CUP (Europa).</p>
       </div>
       <Flash success={sp.success} error={sp.error} />
       <Card>
         <CardContent className="pt-6">
-          <form action={upsertExchangeRateAction} className="grid grid-cols-[140px_1fr_120px_auto] gap-2 items-end">
+          <form action={upsertExchangeRateAction} className="grid grid-cols-[140px_120px_1fr_1fr_auto] gap-2 items-end">
             <div className="space-y-1"><Label htmlFor="day" className="text-xs">Fecha</Label><Input id="day" name="day" type="date" required defaultValue={todayISO()} /></div>
             <div className="space-y-1">
-              <Label htmlFor="rate" className="text-xs">Tasa</Label>
-              <div className="grid grid-cols-[1fr_60px_1fr] gap-1 items-center">
-                <Input id="rate" name="rate" type="number" step="0.0001" min={0.0001} required placeholder="380.00" />
-                <div className="text-center text-xs text-muted-foreground">USD→</div>
-                <Input name="currency_to" defaultValue="CUP" />
-              </div>
-              <input type="hidden" name="currency_from" value="USD" />
+              <Label htmlFor="currency_from" className="text-xs">Moneda</Label>
+              <Select id="currency_from" name="currency_from" defaultValue="USD">
+                <option value="USD">USD (EEUU)</option>
+                <option value="EUR">EUR (Europa)</option>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="rate" className="text-xs">Tasa → CUP</Label>
+              <Input id="rate" name="rate" type="number" step="0.0001" min={0.0001} required placeholder="380.00" />
+              <input type="hidden" name="currency_to" value="CUP" />
             </div>
             <div className="space-y-1"><Label htmlFor="notes" className="text-xs">Notas</Label><Input id="notes" name="notes" placeholder="Opcional" /></div>
             <Button type="submit">Guardar</Button>

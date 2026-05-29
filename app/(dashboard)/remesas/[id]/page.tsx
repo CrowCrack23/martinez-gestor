@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { hasRole, requirePermission } from "@/lib/auth";
-import { getRemittance, REM_STATUS_BADGE, REM_STATUS_LABEL, REM_PAYOUT_LABEL } from "@/lib/remittances";
+import { getRemittance, REM_STATUS_BADGE, REM_STATUS_LABEL, REM_PAYOUT_LABEL, REM_ORIGIN_LABEL, REM_ORIGIN_CURRENCY } from "@/lib/remittances";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
+import { RemittanceAmounts } from "@/components/remittance-amounts";
 import { formatDateTime } from "@/lib/format";
 import {
   cancelRemittanceAction, deleteRemittanceAction, payRemittanceAction, updateRemittanceAction,
@@ -18,7 +19,9 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ error?: string; success?: string }>;
 
 const cupFmt = new Intl.NumberFormat("es-CU", { style: "currency", currency: "CUP", maximumFractionDigits: 2 });
-const usdFmt = new Intl.NumberFormat("es-CU", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+function money(amount: number, currency: string) {
+  return new Intl.NumberFormat("es-CU", { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
+}
 
 export default async function RemesaDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
   const user = await requirePermission("remesas");
@@ -27,6 +30,7 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
   if (!r) notFound();
   const editable = r.status === "pendiente";
   const canDelete = hasRole(user, ["admin"]) && r.status !== "entregada";
+  const cur = REM_ORIGIN_CURRENCY[r.origin];
 
   const update = updateRemittanceAction.bind(null, r.id);
   const pay = payRemittanceAction.bind(null, r.id);
@@ -41,8 +45,9 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${REM_STATUS_BADGE[r.status]}`}>
             {REM_STATUS_LABEL[r.status]}
           </span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-muted text-xs">{REM_ORIGIN_LABEL[r.origin]}</span>
           <span className="text-sm text-muted-foreground">
-            {usdFmt.format(r.amount_usd)} × {r.exchange_rate} = <strong>{cupFmt.format(r.amount_cup)}</strong>
+            {money(r.amount_usd, cur)} × {r.exchange_rate} = <strong>{cupFmt.format(r.amount_cup)}</strong>
           </span>
         </div>
       </div>
@@ -55,8 +60,9 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
               <Field label="Remitente" value={`${r.sender_name}${r.sender_phone ? ` · ${r.sender_phone}` : ""}`} />
               <Field label="Beneficiario" value={`${r.beneficiary_name}${r.beneficiary_phone ? ` · ${r.beneficiary_phone}` : ""}`} />
               <Field label="Cédula" value={r.beneficiary_doc || "—"} />
+              <Field label="Origen" value={REM_ORIGIN_LABEL[r.origin]} />
               <Field label="Pago" value={REM_PAYOUT_LABEL[r.payout_method]} />
-              <Field label="Comisión" value={usdFmt.format(r.commission_usd)} />
+              <Field label="Comisión" value={money(r.commission_usd, cur)} />
               <Field label="Creada" value={formatDateTime(r.created_at)} />
               {r.paid_at && <Field label="Entregada" value={formatDateTime(r.paid_at)} />}
             </div>
@@ -89,11 +95,10 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
                 </div>
                 <div className="space-y-2 mt-3"><Label htmlFor="beneficiary_address">Dirección</Label><Textarea id="beneficiary_address" name="beneficiary_address" rows={2} defaultValue={r.beneficiary_address} /></div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="space-y-2"><Label htmlFor="amount_usd">USD *</Label><Input id="amount_usd" name="amount_usd" type="number" step="0.01" min={0.01} required defaultValue={String(r.amount_usd)} /></div>
-                <div className="space-y-2"><Label htmlFor="exchange_rate">Tasa *</Label><Input id="exchange_rate" name="exchange_rate" type="number" step="0.0001" min={0.0001} required defaultValue={String(r.exchange_rate)} /></div>
-                <div className="space-y-2"><Label htmlFor="commission_usd">Comisión USD</Label><Input id="commission_usd" name="commission_usd" type="number" step="0.01" min={0} defaultValue={String(r.commission_usd)} /></div>
-              </div>
+              <RemittanceAmounts
+                rates={{ eeuu: null, europa: null }}
+                initial={{ origin: r.origin, amount: r.amount_usd, rate: r.exchange_rate, commission: r.commission_usd }}
+              />
               <div className="space-y-2"><Label htmlFor="notes">Notas</Label><Textarea id="notes" name="notes" rows={2} defaultValue={r.notes} /></div>
               <div className="flex gap-2 justify-end pt-2">
                 <Button asChild variant="ghost"><Link href="/remesas">Cancelar</Link></Button>
