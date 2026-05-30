@@ -1,9 +1,9 @@
 "use server";
 import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth";
+import { requireRole, remittanceAssignee } from "@/lib/auth";
 import {
   cancelRemittance, createRemittance, deleteRemittance, payRemittance,
-  updateRemittance, upsertExchangeRate, deleteExchangeRate,
+  updateRemittance, upsertExchangeRate, deleteExchangeRate, getRemittance,
 } from "@/lib/remittances";
 import type { RemittancePayoutMethod, RemittanceOrigin } from "@/lib/supabase-types";
 import { optionalString, requireString, ValidationError } from "@/lib/validation";
@@ -42,6 +42,7 @@ function parseFields(form: FormData) {
     origin: parseOrigin(form.get("origin")),
     payout_method: parseMethod(form.get("payout_method")),
     notes: optionalString(form, "notes"),
+    assigned_to: optionalString(form, "assigned_to") || null,
   };
 }
 
@@ -66,17 +67,38 @@ export async function updateRemittanceAction(id: string, formData: FormData) {
   redirect(`/remesas/${id}?success=Remesa+actualizada`);
 }
 
+/**
+ * El mensajero solo puede operar (entregar/cancelar) las remesas que tiene
+ * asignadas. Los roles plenos (admin/vendedor) operan cualquiera.
+ */
+async function assertCanOperate(id: string, user: Awaited<ReturnType<typeof requireRole>>) {
+  const assignee = remittanceAssignee(user);
+  if (!assignee) return; // rol pleno
+  const r = await getRemittance(id);
+  if (!r || r.assigned_to !== assignee) {
+    redirect(`/remesas?error=${encodeURIComponent("No tienes esta remesa asignada.")}`);
+  }
+}
+
 export async function payRemittanceAction(id: string) {
-  const user = await requireRole(["admin", "vendedor"]);
+  const user = await requireRole(["admin", "vendedor", "mensajero"]);
+  await assertCanOperate(id, user);
   try { await payRemittance(id, user.id); }
-  catch (e) { redirect(`/remesas/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`); }
+  catch (e) {
+    if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
+    redirect(`/remesas/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
+  }
   redirect(`/remesas/${id}?success=Remesa+marcada+como+entregada`);
 }
 
 export async function cancelRemittanceAction(id: string) {
-  await requireRole(["admin", "vendedor"]);
+  const user = await requireRole(["admin", "vendedor", "mensajero"]);
+  await assertCanOperate(id, user);
   try { await cancelRemittance(id); }
-  catch (e) { redirect(`/remesas/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`); }
+  catch (e) {
+    if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
+    redirect(`/remesas/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
+  }
   redirect(`/remesas/${id}?success=Remesa+cancelada`);
 }
 

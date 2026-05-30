@@ -53,7 +53,7 @@ export type JournalLineInput = { account_id: string; debit: number; credit: numb
 export type JournalEntrySummary = JournalEntry & { line_count: number };
 
 export const listJournalEntries = unstable_cache(
-  async (filter?: { status?: JournalEntryStatus; from?: string; to?: string; scope?: string[] }): Promise<JournalEntrySummary[]> => {
+  async (filter?: { status?: JournalEntryStatus; from?: string; to?: string; scope?: string[]; business?: string }): Promise<JournalEntrySummary[]> => {
     const sb = getSupabase();
     let q = sb.from("journal_entries").select("*, journal_lines(id)").order("entry_date", { ascending: false }).order("created_at", { ascending: false });
     if (filter?.status) q = q.eq("status", filter.status);
@@ -61,6 +61,8 @@ export const listJournalEntries = unstable_cache(
     if (filter?.to) q = q.lte("entry_date", filter.to);
     // scope: limitar a asientos del/los negocio(s) del usuario.
     if (filter?.scope) q = q.in("business", filter.scope);
+    // business: ver el libro de un negocio concreto (selector de reportes).
+    if (filter?.business) q = q.eq("business", filter.business);
     const { data, error } = await q;
     if (error) throw error;
     type R = JournalEntry & { journal_lines: { id: string }[] | null };
@@ -200,7 +202,7 @@ export type TrialBalanceRow = {
   debit: number; credit: number; balance: number;
 };
 
-export async function trialBalance(opts?: { from?: string; to?: string; postedOnly?: boolean; scope?: string[] }): Promise<TrialBalanceRow[]> {
+export async function trialBalance(opts?: { from?: string; to?: string; postedOnly?: boolean; scope?: string[]; business?: string }): Promise<TrialBalanceRow[]> {
   const sb = getSupabase();
   let q = sb.from("journal_lines")
     .select("debit,credit,account_id,journal_entries!inner(entry_date,status,business), accounts!inner(code,name,type)");
@@ -208,6 +210,7 @@ export async function trialBalance(opts?: { from?: string; to?: string; postedOn
   if (opts?.from) q = q.gte("journal_entries.entry_date", opts.from);
   if (opts?.to) q = q.lte("journal_entries.entry_date", opts.to);
   if (opts?.scope) q = q.in("journal_entries.business", opts.scope);
+  if (opts?.business) q = q.eq("journal_entries.business", opts.business);
   const { data, error } = await q;
   if (error) throw error;
   type Row = {
@@ -238,6 +241,29 @@ export async function trialBalance(opts?: { from?: string; to?: string; postedOn
     }
   }
   return Array.from(agg.values()).sort((a, b) => a.account_code.localeCompare(b.account_code));
+}
+
+// ── Estado de resultados (P&L) ───────────────────────────────────────────────
+
+export type IncomeStatement = {
+  income: TrialBalanceRow[];
+  expense: TrialBalanceRow[];
+  totalIncome: number;
+  totalExpense: number;
+  netIncome: number;
+};
+
+/**
+ * Estado de resultados por negocio (o consolidado). Reutiliza la agregación de
+ * `trialBalance` y separa ingresos de gastos; utilidad neta = ingresos − gastos.
+ */
+export async function incomeStatement(opts?: { from?: string; to?: string; postedOnly?: boolean; scope?: string[]; business?: string }): Promise<IncomeStatement> {
+  const rows = await trialBalance(opts);
+  const income = rows.filter((r) => r.type === "ingreso");
+  const expense = rows.filter((r) => r.type === "gasto");
+  const totalIncome = income.reduce((s, r) => s + r.balance, 0);
+  const totalExpense = expense.reduce((s, r) => s + r.balance, 0);
+  return { income, expense, totalIncome, totalExpense, netIncome: totalIncome - totalExpense };
 }
 
 export const JOURNAL_STATUS_LABEL: Record<JournalEntryStatus, string> = {

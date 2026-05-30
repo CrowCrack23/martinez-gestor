@@ -33,6 +33,21 @@ export function businessScope(user: CurrentUser): string[] | undefined {
   return user.allBusinesses ? undefined : user.businesses;
 }
 
+/** Roles que operan remesas a pleno (crean, editan, ven todas). */
+const REMITTANCE_FULL_ROLES = ["admin", "vendedor", "contador"];
+
+/**
+ * Alcance de remesas para un usuario:
+ *  - undefined → ve todas (admin/vendedor/contador).
+ *  - string    → es mensajero: solo ve/opera las remesas asignadas a su id.
+ * Un usuario con un rol "pleno" siempre ve todo, aunque también sea mensajero.
+ */
+export function remittanceAssignee(user: CurrentUser): string | undefined {
+  if (user.roles.some((r) => REMITTANCE_FULL_ROLES.includes(r))) return undefined;
+  if (user.roles.includes("mensajero")) return user.id;
+  return undefined;
+}
+
 function parseHash(raw: string): { salt: Buffer; hash: Buffer } | null {
   const [saltHex, hashHex] = raw.split(":");
   if (!saltHex || !hashHex) return null;

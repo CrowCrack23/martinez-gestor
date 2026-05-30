@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth";
 import { listPositions } from "@/lib/hr";
 import { listWarehouses } from "@/lib/warehouses";
+import { listBusinessesLite } from "@/lib/businesses";
 import { listUsers } from "@/lib/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,8 @@ type SP = Promise<{ error?: string }>;
 
 export default async function NuevoEmpleadoPage({ searchParams }: { searchParams: SP }) {
   await requirePermission("empleados");
-  const [positions, warehouses, users, sp] = await Promise.all([listPositions(), listWarehouses(), listUsers(), searchParams]);
+  const [positions, warehouses, businesses, users, sp] = await Promise.all([listPositions(), listWarehouses(), listBusinessesLite(), listUsers(), searchParams]);
+  const businessOptions = businesses.filter((b) => b.kind === "tienda");
   return (
     <div className="max-w-xl space-y-6">
       <h1 className="text-2xl font-semibold">Nuevo empleado</h1>
@@ -51,6 +53,14 @@ export default async function NuevoEmpleadoPage({ searchParams }: { searchParams
                   {warehouses.filter((w) => w.active).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </Select>
               </div>
+            </div>
+            <div className="space-y-2 max-w-xs">
+              <Label htmlFor="business">Negocio (contabilidad)</Label>
+              <Select id="business" name="business" defaultValue="">
+                <option value="">— General —</option>
+                {businessOptions.map((b) => <option key={b.slug} value={b.slug}>{b.label}</option>)}
+              </Select>
+              <p className="text-xs text-muted-foreground">Su nómina se imputa a la contabilidad de este negocio.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2"><Label htmlFor="hire_date">Fecha ingreso</Label><Input id="hire_date" name="hire_date" type="date" /></div>

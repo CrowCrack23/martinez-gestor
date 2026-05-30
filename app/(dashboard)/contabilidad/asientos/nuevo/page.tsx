@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requirePermission, businessScope } from "@/lib/auth";
 import { listAccounts } from "@/lib/accounting";
-import { listStoresLite } from "@/lib/stores-lite";
+import { listBusinessesLite } from "@/lib/businesses";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,10 +21,10 @@ function todayISO(): string {
 
 export default async function NuevoAsientoPage({ searchParams }: { searchParams: SP }) {
   const user = await requirePermission("contabilidad");
-  const [accounts, stores, sp] = await Promise.all([listAccounts(), listStoresLite(), searchParams]);
+  const [accounts, businesses, sp] = await Promise.all([listAccounts(), listBusinessesLite(), searchParams]);
   const active = accounts.filter((a) => a.active);
   // Si el usuario está limitado a negocios, solo puede asentar en los suyos.
-  const businessOptions = businessScope(user) ? stores.filter((s) => user.businesses.includes(s.slug)) : stores;
+  const businessOptions = businessScope(user) ? businesses.filter((b) => user.businesses.includes(b.slug)) : businesses;
   return (
     <div className="max-w-3xl space-y-6">
       <h1 className="text-2xl font-semibold">Nuevo asiento</h1>

@@ -82,10 +82,37 @@ Dos dimensiones independientes (ver `lib/permissions.ts` y `lib/auth.ts`):
 | `vendedor`   | Inventario, ventas, clientes, remesas                              |
 | `contador`   | Lotes, proveedores, compras, ventas, clientes, nómina, remesas, contabilidad |
 | `rrhh`       | Empleados, asistencia, nómina                                       |
+| `mensajero`  | Remesas — **solo las asignadas a él** (entregar / marcar no entregada; sin ver comisión) |
 
 2. **Negocio (tienda)** — `user_businesses` asigna tiendas a cada usuario; sus datos de
-   ventas/inventario/compras/contabilidad se filtran a ellas. `admin` ve todos. Las remesas
-   no se filtran por negocio. Se asigna en `/usuarios`.
+   ventas/inventario/compras/contabilidad se filtran a ellas. `admin` ve todos. Se asigna en
+   `/usuarios`.
+
+### Contabilidad por negocio (libros separados)
+
+La contabilidad usa **un plan de cuentas compartido + una dimensión "negocio"** en cada
+asiento (`journal_entries.business`). Un "negocio" es una tienda **o** `remesas` (negocio
+aparte, sin tienda ni stock); el catálogo está en la tabla `businesses` (ver migración 0018,
+`lib/businesses.ts`). Cada negocio tiene:
+
+- **Numeración propia** con prefijo (`ROPA-2026-00001`, `REM-2026-00001`), vía trigger
+  `set_journal_entry_code` + tabla `journal_entry_counters`.
+- **Reportes filtrables por negocio o consolidados** (suma de todos): Asientos, Balance y
+  **Estado de resultados** (`/contabilidad/resultados`) tienen un selector de negocio
+  (`components/business-filter.tsx`). El admin ve todos; los demás solo sus negocios.
+
+Imputación automática del negocio: **ventas/compras** → tienda del almacén; **nómina** →
+negocio del empleado (`employees.business`, un asiento por negocio al cerrar); **remesas** →
+negocio `remesas`.
+
+### Remesas: mensajeros (rol `mensajero`)
+
+Cada remesa se puede asignar a un **mensajero** (`remittance_operations.assigned_to`, ver
+migración 0019) — quien lleva el dinero al beneficiario. Se asigna al crear la remesa y es
+editable después (por admin/vendedor). El mensajero entra a `/remesas` y ve **solo las remesas
+asignadas a él** (filtrado por `remittanceAssignee(user)` en `lib/auth.ts`), sin la comisión,
+y puede marcarlas **entregada** o **no entregada**; no crea ni edita. Los roles
+admin/vendedor/contador siguen viendo todas.
 
 Para cambiar qué módulos ve un rol, edita SOLO `ROLE_PERMISSIONS` en `lib/permissions.ts`.
 

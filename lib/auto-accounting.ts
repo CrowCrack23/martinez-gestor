@@ -173,42 +173,46 @@ export async function generateSaleEntry(input: {
 }
 
 /**
- * Nómina cerrada:
+ * Nómina cerrada: un asiento POR NEGOCIO (libros separados). Cada grupo es el
+ * total de los empleados de un negocio; los empleados sin negocio van a "general"
+ * (business = null).
  *   Salarios (debe, bruto) / Salarios por pagar (haber, neto) + Impuestos por pagar (haber, deducciones)
  */
 export async function generatePayrollEntry(input: {
   runId: string;
   periodStart: string;
   periodEnd: string;
-  grossTotal: number;
-  deductionsTotal: number;
-  netTotal: number;
   date: string;
   userId: string | null;
+  groups: { business: string | null; gross: number; deductions: number; net: number }[];
 }): Promise<void> {
   try {
-    const gross = round2(input.grossTotal);
-    if (gross <= 0) return;
-    if (await entryExists("nomina", input.runId)) return;
-    const net = round2(input.netTotal);
-    const deductions = round2(input.deductionsTotal);
     const acc = await accountIdsByCode([ACC.salarios, ACC.salariosPorPagar, ACC.impuestos]);
-
-    const lines: JournalLineInput[] = [
-      { account_id: acc.get(ACC.salarios)!, debit: gross, credit: 0, description: "Gasto de salarios" },
-      { account_id: acc.get(ACC.salariosPorPagar)!, debit: 0, credit: net, description: "Salarios netos por pagar" },
-    ];
-    if (deductions > 0) {
-      lines.push({ account_id: acc.get(ACC.impuestos)!, debit: 0, credit: deductions, description: "Deducciones por pagar" });
+    for (const g of input.groups) {
+      const gross = round2(g.gross);
+      if (gross <= 0) continue;
+      // Idempotencia por (corrida, negocio).
+      const refId = `${input.runId}:${g.business ?? "general"}`;
+      if (await entryExists("nomina", refId)) continue;
+      const net = round2(g.net);
+      const deductions = round2(g.deductions);
+      const lines: JournalLineInput[] = [
+        { account_id: acc.get(ACC.salarios)!, debit: gross, credit: 0, description: "Gasto de salarios" },
+        { account_id: acc.get(ACC.salariosPorPagar)!, debit: 0, credit: net, description: "Salarios netos por pagar" },
+      ];
+      if (deductions > 0) {
+        lines.push({ account_id: acc.get(ACC.impuestos)!, debit: 0, credit: deductions, description: "Deducciones por pagar" });
+      }
+      await createJournalEntry({
+        entry_date: input.date,
+        description: `Nómina ${input.periodStart} a ${input.periodEnd}`,
+        reference_type: "nomina",
+        reference_id: refId,
+        business: g.business,
+        created_by: input.userId,
+        lines,
+      });
     }
-    await createJournalEntry({
-      entry_date: input.date,
-      description: `Nómina ${input.periodStart} a ${input.periodEnd}`,
-      reference_type: "nomina",
-      reference_id: input.runId,
-      created_by: input.userId,
-      lines,
-    });
   } catch (e) {
     console.error("[auto-accounting] generatePayrollEntry falló:", e);
   }
@@ -242,6 +246,7 @@ export async function generateRemittanceEntry(input: {
       description: `Comisión remesa ${input.code}`,
       reference_type: "remesa",
       reference_id: input.remittanceId,
+      business: "remesas",
       created_by: input.userId,
       lines,
     });

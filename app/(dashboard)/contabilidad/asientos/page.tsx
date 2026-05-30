@@ -2,18 +2,24 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { requirePermission, businessScope } from "@/lib/auth";
 import { listJournalEntries, JOURNAL_STATUS_BADGE, JOURNAL_STATUS_LABEL } from "@/lib/accounting";
+import { listBusinessesLite } from "@/lib/businesses";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
+import { BusinessFilter } from "@/components/business-filter";
 import { formatPrice } from "@/lib/format";
 import type { JournalEntryStatus } from "@/lib/supabase-types";
 
-type SP = Promise<{ status?: JournalEntryStatus; success?: string; error?: string }>;
+type SP = Promise<{ status?: JournalEntryStatus; business?: string; success?: string; error?: string }>;
 
 export default async function AsientosPage({ searchParams }: { searchParams: SP }) {
   const user = await requirePermission("contabilidad");
   const sp = await searchParams;
-  const entries = await listJournalEntries({ status: sp.status, scope: businessScope(user) });
+  const scope = businessScope(user);
+  // Negocio seleccionado (selector de reportes). Debe respetar el alcance del usuario.
+  const business = sp.business && (!scope || scope.includes(sp.business)) ? sp.business : undefined;
+  const businesses = (await listBusinessesLite()).filter((b) => !scope || scope.includes(b.slug));
+  const entries = await listJournalEntries({ status: sp.status, scope, business });
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -24,10 +30,13 @@ export default async function AsientosPage({ searchParams }: { searchParams: SP 
         <Button asChild><Link href="/contabilidad/asientos/nuevo"><Plus className="size-4" />Nuevo asiento</Link></Button>
       </div>
       <Flash success={sp.success} error={sp.error} />
-      <div className="flex gap-2 text-sm">
-        <Chip href="/contabilidad/asientos" active={!sp.status}>Todos</Chip>
-        <Chip href="/contabilidad/asientos?status=borrador" active={sp.status === "borrador"}>Borradores</Chip>
-        <Chip href="/contabilidad/asientos?status=contabilizada" active={sp.status === "contabilizada"}>Contabilizados</Chip>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-2 text-sm">
+          <Chip href="/contabilidad/asientos" active={!sp.status}>Todos</Chip>
+          <Chip href="/contabilidad/asientos?status=borrador" active={sp.status === "borrador"}>Borradores</Chip>
+          <Chip href="/contabilidad/asientos?status=contabilizada" active={sp.status === "contabilizada"}>Contabilizados</Chip>
+        </div>
+        {businesses.length > 1 && <BusinessFilter businesses={businesses} />}
       </div>
       <Card>
         <div className="overflow-x-auto">

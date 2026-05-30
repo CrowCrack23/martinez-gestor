@@ -1,19 +1,24 @@
 import { requirePermission, businessScope } from "@/lib/auth";
 import { trialBalance, ACCOUNT_TYPE_LABEL } from "@/lib/accounting";
+import { listBusinessesLite } from "@/lib/businesses";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BusinessFilter } from "@/components/business-filter";
 import { formatPrice } from "@/lib/format";
 import type { AccountType } from "@/lib/supabase-types";
 
-type SP = Promise<{ from?: string; to?: string; posted?: string }>;
+type SP = Promise<{ from?: string; to?: string; posted?: string; business?: string }>;
 
 export default async function BalancePage({ searchParams }: { searchParams: SP }) {
   const user = await requirePermission("contabilidad");
   const sp = await searchParams;
   const postedOnly = sp.posted !== "0";
-  const rows = await trialBalance({ from: sp.from, to: sp.to, postedOnly, scope: businessScope(user) });
+  const scope = businessScope(user);
+  const business = sp.business && (!scope || scope.includes(sp.business)) ? sp.business : undefined;
+  const businesses = (await listBusinessesLite()).filter((b) => !scope || scope.includes(b.slug));
+  const rows = await trialBalance({ from: sp.from, to: sp.to, postedOnly, scope, business });
 
   const groups: Record<AccountType, typeof rows> = {
     activo: [], pasivo: [], patrimonio: [], ingreso: [], gasto: [],
@@ -28,15 +33,24 @@ export default async function BalancePage({ searchParams }: { searchParams: SP }
       </div>
       <Card>
         <CardContent className="pt-6">
-          <form className="flex flex-wrap items-end gap-3 text-sm" action="/contabilidad/balance">
-            <div className="space-y-1"><Label htmlFor="from" className="text-xs">Desde</Label><Input id="from" name="from" type="date" defaultValue={sp.from ?? ""} /></div>
-            <div className="space-y-1"><Label htmlFor="to" className="text-xs">Hasta</Label><Input id="to" name="to" type="date" defaultValue={sp.to ?? ""} /></div>
-            <label className="flex items-center gap-2 px-2 h-10">
-              <input type="checkbox" name="posted" value="0" defaultChecked={!postedOnly} className="size-4" />
-              Incluir borradores
-            </label>
-            <Button type="submit" variant="secondary" size="sm">Filtrar</Button>
-          </form>
+          <div className="flex flex-wrap items-end gap-3">
+            {businesses.length > 1 && (
+              <div className="space-y-1">
+                <Label className="text-xs">Negocio</Label>
+                <BusinessFilter businesses={businesses} />
+              </div>
+            )}
+            <form className="flex flex-wrap items-end gap-3 text-sm" action="/contabilidad/balance">
+              <input type="hidden" name="business" value={business ?? ""} />
+              <div className="space-y-1"><Label htmlFor="from" className="text-xs">Desde</Label><Input id="from" name="from" type="date" defaultValue={sp.from ?? ""} /></div>
+              <div className="space-y-1"><Label htmlFor="to" className="text-xs">Hasta</Label><Input id="to" name="to" type="date" defaultValue={sp.to ?? ""} /></div>
+              <label className="flex items-center gap-2 px-2 h-10">
+                <input type="checkbox" name="posted" value="0" defaultChecked={!postedOnly} className="size-4" />
+                Incluir borradores
+              </label>
+              <Button type="submit" variant="secondary" size="sm">Filtrar</Button>
+            </form>
+          </div>
         </CardContent>
       </Card>
 

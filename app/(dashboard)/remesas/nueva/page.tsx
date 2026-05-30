@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth";
 import { getLatestRate, REM_PAYOUT_LABEL } from "@/lib/remittances";
+import { listUsersByRole } from "@/lib/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,9 +16,10 @@ type SP = Promise<{ error?: string }>;
 
 export default async function NuevaRemesaPage({ searchParams }: { searchParams: SP }) {
   await requirePermission("remesas");
-  const [usdRate, eurRate, sp] = await Promise.all([
+  const [usdRate, eurRate, couriers, sp] = await Promise.all([
     getLatestRate("USD", "CUP"),
     getLatestRate("EUR", "CUP"),
+    listUsersByRole("mensajero"),
     searchParams,
   ]);
   return (
@@ -55,6 +57,14 @@ export default async function NuevaRemesaPage({ searchParams }: { searchParams: 
               <div className="space-y-2 mt-3"><Label htmlFor="beneficiary_address">Dirección</Label><Textarea id="beneficiary_address" name="beneficiary_address" rows={2} /></div>
             </div>
             <RemittanceAmounts rates={{ eeuu: usdRate?.rate ?? null, europa: eurRate?.rate ?? null }} />
+            <div className="space-y-2 max-w-xs">
+              <Label htmlFor="assigned_to">Mensajero</Label>
+              <Select id="assigned_to" name="assigned_to" defaultValue="">
+                <option value="">— Sin asignar —</option>
+                {couriers.map((c) => <option key={c.id} value={c.id}>{c.full_name || c.email}</option>)}
+              </Select>
+              <p className="text-xs text-muted-foreground">Quién lleva el dinero al beneficiario. Verá esta remesa en su lista.</p>
+            </div>
             <div className="space-y-2"><Label htmlFor="notes">Notas</Label><Textarea id="notes" name="notes" rows={2} /></div>
             <div className="flex gap-2 justify-end pt-2">
               <Button asChild variant="ghost"><Link href="/remesas">Cancelar</Link></Button>

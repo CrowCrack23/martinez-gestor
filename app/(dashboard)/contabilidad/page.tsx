@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, FileText, Scale } from "lucide-react";
+import { BookOpen, FileText, Scale, TrendingUp } from "lucide-react";
 import { requirePermission } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -9,12 +9,13 @@ export default async function ContabilidadIndex() {
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-semibold">Contabilidad</h1>
-        <p className="text-sm text-muted-foreground">Plan de cuentas, asientos manuales y balance.</p>
+        <p className="text-sm text-muted-foreground">Plan de cuentas, asientos manuales y reportes por negocio.</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Tile href="/contabilidad/cuentas" icon={<BookOpen className="size-5" />} title="Plan de cuentas" desc="Catálogo de cuentas (activo, pasivo, ingreso, gasto, etc.)" />
-        <Tile href="/contabilidad/asientos" icon={<FileText className="size-5" />} title="Asientos de diario" desc="Registrar movimientos contables manuales." />
-        <Tile href="/contabilidad/balance" icon={<Scale className="size-5" />} title="Balance" desc="Saldo de comprobación por cuenta." />
+        <Tile href="/contabilidad/asientos" icon={<FileText className="size-5" />} title="Asientos de diario" desc="Registrar movimientos contables manuales. Numeración por negocio." />
+        <Tile href="/contabilidad/balance" icon={<Scale className="size-5" />} title="Balance" desc="Saldo de comprobación por cuenta, por negocio o consolidado." />
+        <Tile href="/contabilidad/resultados" icon={<TrendingUp className="size-5" />} title="Estado de resultados" desc="Ingresos, gastos y utilidad por negocio o consolidado." />
       </div>
     </div>
   );

@@ -36,7 +36,7 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
-export type RoleId = "admin" | "almacenero" | "vendedor" | "contador" | "rrhh";
+export type RoleId = "admin" | "almacenero" | "vendedor" | "contador" | "rrhh" | "mensajero";
 
 const ALL = "*" as const;
 
@@ -69,6 +69,9 @@ export const ROLE_PERMISSIONS: Record<RoleId, Permission[] | typeof ALL> = {
     "contabilidad",
   ],
   rrhh: ["empleados", "asistencia", "nomina"],
+  // Mensajero: solo entra al módulo de remesas; dentro, las páginas lo limitan a
+  // las remesas que tiene asignadas (ver remittanceAssignee en lib/auth.ts).
+  mensajero: ["remesas"],
 };
 
 /** Conjunto de permisos efectivos de un usuario según sus roles. */
@@ -90,6 +93,45 @@ export function roleListHasPermission(roles: string[], perm: Permission): boolea
   return p === "all" || p.has(perm);
 }
 
+/**
+ * Ruta principal de cada permiso (para mandar a un usuario a su primera sección
+ * accesible). El orden de `PERMISSIONS` define la prioridad de aterrizaje.
+ */
+export const PERMISSION_HOME: Record<Permission, string> = {
+  productos: "/productos",
+  inventario: "/inventario",
+  movimientos: "/inventario/movimientos",
+  lotes: "/inventario/lotes",
+  almacenes: "/almacenes",
+  proveedores: "/proveedores",
+  compras: "/compras",
+  ventas: "/ventas",
+  clientes: "/clientes",
+  empleados: "/empleados",
+  asistencia: "/asistencia",
+  nomina: "/nomina",
+  recetas: "/recetas",
+  produccion: "/produccion",
+  remesas: "/remesas",
+  contabilidad: "/contabilidad",
+  usuarios: "/usuarios",
+  asistente: "/asistente",
+};
+
+/**
+ * A dónde mandar a un usuario al entrar: el dashboard `/` es solo para admin;
+ * el resto cae en su primera sección permitida. Si no tiene ninguna, a /sin-acceso.
+ */
+export function landingPathForRoles(roles: string[]): string {
+  if (roles.includes("admin")) return "/";
+  const perms = permissionsForRoles(roles);
+  if (perms === "all") return "/";
+  for (const p of PERMISSIONS) {
+    if (perms.has(p)) return PERMISSION_HOME[p];
+  }
+  return "/sin-acceso";
+}
+
 /** Etiqueta legible de cada rol (para la UI de usuarios). */
 export const ROLE_LABEL: Record<RoleId, string> = {
   admin: "Administrador",
@@ -97,4 +139,5 @@ export const ROLE_LABEL: Record<RoleId, string> = {
   vendedor: "Vendedor",
   contador: "Contador",
   rrhh: "Recursos Humanos",
+  mensajero: "Mensajero",
 };

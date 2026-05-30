@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { hasRole, requirePermission } from "@/lib/auth";
+import { hasRole, requirePermission, remittanceAssignee } from "@/lib/auth";
 import { getRemittance, REM_STATUS_BADGE, REM_STATUS_LABEL, REM_PAYOUT_LABEL, REM_ORIGIN_LABEL, REM_ORIGIN_CURRENCY } from "@/lib/remittances";
+import { listUsersByRole } from "@/lib/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,11 +27,17 @@ function money(amount: number, currency: string) {
 export default async function RemesaDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
   const user = await requirePermission("remesas");
   const { id } = await params;
-  const [r, sp] = await Promise.all([getRemittance(id), searchParams]);
+  const [r, couriers, sp] = await Promise.all([getRemittance(id), listUsersByRole("mensajero"), searchParams]);
   if (!r) notFound();
-  const editable = r.status === "pendiente";
+  const assignee = remittanceAssignee(user);
+  const isCourier = assignee !== undefined;
+  // El mensajero solo puede abrir las remesas que tiene asignadas.
+  if (isCourier && r.assigned_to !== assignee) notFound();
+  const pending = r.status === "pendiente";
+  const editable = pending && !isCourier;        // el mensajero no edita los datos
   const canDelete = hasRole(user, ["admin"]) && r.status !== "entregada";
   const cur = REM_ORIGIN_CURRENCY[r.origin];
+  const courierName = r.assigned_to ? (couriers.find((c) => c.id === r.assigned_to)?.full_name || couriers.find((c) => c.id === r.assigned_to)?.email || "—") : "—";
 
   const update = updateRemittanceAction.bind(null, r.id);
   const pay = payRemittanceAction.bind(null, r.id);
@@ -62,7 +69,8 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
               <Field label="Cédula" value={r.beneficiary_doc || "—"} />
               <Field label="Origen" value={REM_ORIGIN_LABEL[r.origin]} />
               <Field label="Pago" value={REM_PAYOUT_LABEL[r.payout_method]} />
-              <Field label="Comisión" value={money(r.commission_usd, cur)} />
+              {!isCourier && <Field label="Comisión" value={money(r.commission_usd, cur)} />}
+              <Field label="Mensajero" value={courierName} />
               <Field label="Creada" value={formatDateTime(r.created_at)} />
               {r.paid_at && <Field label="Entregada" value={formatDateTime(r.paid_at)} />}
             </div>
@@ -99,6 +107,14 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
                 rates={{ eeuu: null, europa: null }}
                 initial={{ origin: r.origin, amount: r.amount_usd, rate: r.exchange_rate, commission: r.commission_usd }}
               />
+              <div className="space-y-2 max-w-xs">
+                <Label htmlFor="assigned_to">Mensajero</Label>
+                <Select id="assigned_to" name="assigned_to" defaultValue={r.assigned_to ?? ""}>
+                  <option value="">— Sin asignar —</option>
+                  {couriers.map((c) => <option key={c.id} value={c.id}>{c.full_name || c.email}</option>)}
+                </Select>
+                <p className="text-xs text-muted-foreground">Quién lleva el dinero al beneficiario.</p>
+              </div>
               <div className="space-y-2"><Label htmlFor="notes">Notas</Label><Textarea id="notes" name="notes" rows={2} defaultValue={r.notes} /></div>
               <div className="flex gap-2 justify-end pt-2">
                 <Button asChild variant="ghost"><Link href="/remesas">Cancelar</Link></Button>
@@ -109,7 +125,7 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
         </Card>
       )}
 
-      {editable && (
+      {pending && (
         <>
           <Card>
             <CardContent className="pt-6 flex flex-wrap gap-3 items-center justify-between">
@@ -119,9 +135,9 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
           </Card>
           <Card className="border-destructive/30">
             <CardContent className="pt-6 flex items-center justify-between">
-              <div><div className="font-medium">Cancelar</div><div className="text-sm text-muted-foreground">Deja la remesa en historial sin entregarla.</div></div>
+              <div><div className="font-medium">{isCourier ? "No entregada" : "Cancelar"}</div><div className="text-sm text-muted-foreground">{isCourier ? "Si no pudiste entregar el dinero al beneficiario." : "Deja la remesa en historial sin entregarla."}</div></div>
               <div className="flex gap-2">
-                <form action={cancel}><Button type="submit" variant="outline">Cancelar</Button></form>
+                <form action={cancel}><Button type="submit" variant="outline">{isCourier ? "No entregada" : "Cancelar"}</Button></form>
                 {canDelete && <form action={remove}><Button type="submit" variant="destructive">Eliminar</Button></form>}
               </div>
             </CardContent>

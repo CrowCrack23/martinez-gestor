@@ -286,27 +286,28 @@ export async function closePayrollRun(id: string, userId: string | null) {
     .eq("id", id);
   if (error) throw error;
 
-  // Asiento contable automático (borrador): Salarios / Salarios por pagar + Impuestos por pagar.
+  // Asiento contable automático (borrador) POR NEGOCIO del empleado (libros
+  // separados): Salarios / Salarios por pagar + Impuestos por pagar.
   const { data: items, error: iErr } = await sb.from("payroll_items")
-    .select("gross, deductions, net").eq("payroll_run_id", id);
+    .select("gross, deductions, net, employees(business)").eq("payroll_run_id", id);
   if (iErr) throw iErr;
-  const totals = (items ?? []).reduce(
-    (acc, it) => ({
-      gross: acc.gross + Number(it.gross),
-      deductions: acc.deductions + Number(it.deductions),
-      net: acc.net + Number(it.net),
-    }),
-    { gross: 0, deductions: 0, net: 0 },
-  );
+  type Row = { gross: number; deductions: number; net: number; employees: { business: string | null } | null };
+  const byBusiness = new Map<string | null, { business: string | null; gross: number; deductions: number; net: number }>();
+  for (const it of (items ?? []) as unknown as Row[]) {
+    const b = it.employees?.business ?? null;
+    const cur = byBusiness.get(b) ?? { business: b, gross: 0, deductions: 0, net: 0 };
+    cur.gross += Number(it.gross);
+    cur.deductions += Number(it.deductions);
+    cur.net += Number(it.net);
+    byBusiness.set(b, cur);
+  }
   await generatePayrollEntry({
     runId: id,
     periodStart: run.period_start,
     periodEnd: run.period_end,
-    grossTotal: totals.gross,
-    deductionsTotal: totals.deductions,
-    netTotal: totals.net,
     date: new Date().toISOString().slice(0, 10),
     userId,
+    groups: Array.from(byBusiness.values()),
   });
   bust(TAG_PAY);
 }

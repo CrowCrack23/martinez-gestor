@@ -25,6 +25,7 @@ function parseEmployee(form: FormData) {
     hire_date: optionalString(form, "hire_date") || null,
     position_id: optionalString(form, "position_id") || null,
     warehouse_id: optionalString(form, "warehouse_id") || null,
+    business: optionalString(form, "business") || null,
     app_user_id: optionalString(form, "app_user_id") || null,
     monthly_salary: monthly,
     commission_rate: commission,

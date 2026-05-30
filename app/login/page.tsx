@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { signIn } from "@/lib/auth";
+import { landingPathForRoles } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,13 +13,17 @@ async function loginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "/");
+  let dest = next || "/";
   try {
-    await signIn(email, password);
+    const u = await signIn(email, password);
+    // Sin destino explícito (o "/"), aterrizar en la sección que le corresponde:
+    // admin → dashboard; el resto → su primera sección permitida.
+    if (dest === "/") dest = landingPathForRoles(u.roles);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";
     redirect(`/login?error=${encodeURIComponent(msg)}&next=${encodeURIComponent(next)}`);
   }
-  redirect(next || "/");
+  redirect(dest);
 }
 
 export default async function LoginPage({ searchParams }: { searchParams: SearchParams }) {

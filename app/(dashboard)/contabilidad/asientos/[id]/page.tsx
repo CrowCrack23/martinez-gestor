@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission, businessScope } from "@/lib/auth";
 import { getJournalEntry, listAccounts, JOURNAL_STATUS_BADGE, JOURNAL_STATUS_LABEL } from "@/lib/accounting";
+import { listBusinessesLite } from "@/lib/businesses";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,15 +21,16 @@ type SP = Promise<{ success?: string; error?: string }>;
 export default async function AsientoDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
   const user = await requirePermission("contabilidad");
   const { id } = await params;
-  const [entry, sp] = await Promise.all([getJournalEntry(id, businessScope(user)), searchParams]);
+  const [entry, businesses, sp] = await Promise.all([getJournalEntry(id, businessScope(user)), listBusinessesLite(), searchParams]);
   if (!entry) notFound();
+  const businessLabel = entry.business ? (businesses.find((b) => b.slug === entry.business)?.label ?? entry.business) : "General / consolidado";
   const editable = entry.status === "borrador";
   const balanced = Math.abs(entry.total_debit - entry.total_credit) < 0.005;
 
   if (!editable) {
     return (
       <div className="max-w-3xl space-y-6">
-        <Header entry={entry} />
+        <Header entry={entry} businessLabel={businessLabel} />
         <Flash success={sp.success} error={sp.error} />
         <Card>
           <CardContent className="pt-6 space-y-2 text-sm">
@@ -82,7 +84,7 @@ export default async function AsientoDetallePage({ params, searchParams }: { par
 
   return (
     <div className="max-w-3xl space-y-6">
-      <Header entry={entry} />
+      <Header entry={entry} businessLabel={businessLabel} />
       <Flash success={sp.success} error={sp.error} />
       <Card>
         <CardContent className="pt-6">
@@ -121,7 +123,7 @@ export default async function AsientoDetallePage({ params, searchParams }: { par
   );
 }
 
-function Header({ entry }: { entry: { code: string; status: "borrador" | "contabilizada"; total_debit: number; total_credit: number } }) {
+function Header({ entry, businessLabel }: { entry: { code: string; status: "borrador" | "contabilizada"; total_debit: number; total_credit: number }; businessLabel: string }) {
   return (
     <div>
       <h1 className="text-2xl font-semibold font-mono">{entry.code}</h1>
@@ -129,6 +131,7 @@ function Header({ entry }: { entry: { code: string; status: "borrador" | "contab
         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${JOURNAL_STATUS_BADGE[entry.status]}`}>
           {JOURNAL_STATUS_LABEL[entry.status]}
         </span>
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground">{businessLabel}</span>
         <span className="text-sm text-muted-foreground">
           Debe <span className="font-mono">{formatPrice(entry.total_debit)}</span> ·
           Haber <span className="font-mono">{formatPrice(entry.total_credit)}</span>

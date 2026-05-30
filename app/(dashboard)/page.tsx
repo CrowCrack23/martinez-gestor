@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeftRight, Boxes, Plus, Warehouse } from "lucide-react";
 import { requireUser } from "@/lib/auth";
+import { landingPathForRoles } from "@/lib/permissions";
 import { listWarehouses } from "@/lib/warehouses";
 import { listStock, listMovements, MOVEMENT_TYPE_LABEL } from "@/lib/inventory";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +11,9 @@ import { formatDateTime, formatNumber } from "@/lib/format";
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  // El dashboard (KPIs de inventario de toda la empresa) es solo para admin. Al
+  // resto se le manda a su primera sección permitida.
+  if (!user.roles.includes("admin")) redirect(landingPathForRoles(user.roles));
   const [warehouses, stock, movements] = await Promise.all([
     listWarehouses(),
     listStock(),

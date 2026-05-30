@@ -13,11 +13,13 @@ export type Remittance = Database["public"]["Tables"]["remittance_operations"]["
 export type ExchangeRate = Database["public"]["Tables"]["exchange_rates"]["Row"];
 
 export const listRemittances = unstable_cache(
-  async (filter?: { status?: RemittanceStatus; origin?: RemittanceOrigin }): Promise<Remittance[]> => {
+  async (filter?: { status?: RemittanceStatus; origin?: RemittanceOrigin; assignedTo?: string }): Promise<Remittance[]> => {
     const sb = getSupabase();
     let q = sb.from("remittance_operations").select("*").order("created_at", { ascending: false });
     if (filter?.status) q = q.eq("status", filter.status);
     if (filter?.origin) q = q.eq("origin", filter.origin);
+    // assignedTo: limitar a las remesas del mensajero.
+    if (filter?.assignedTo) q = q.eq("assigned_to", filter.assignedTo);
     const { data, error } = await q;
     if (error) throw error;
     return (data ?? []).map((r) => ({
@@ -55,6 +57,7 @@ export async function createRemittance(input: {
   origin: RemittanceOrigin;
   payout_method: RemittancePayoutMethod;
   notes: string;
+  assigned_to?: string | null;
   created_by: string | null;
 }): Promise<string> {
   const sb = getSupabase();

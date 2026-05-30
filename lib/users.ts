@@ -74,6 +74,14 @@ export const listUsers = unstable_cache(
   { revalidate: 30, tags: [TAG] },
 );
 
+/** Usuarios activos que tienen un rol dado (p.ej. mensajeros para asignar remesas). */
+export async function listUsersByRole(roleId: string): Promise<{ id: string; full_name: string; email: string }[]> {
+  const users = await listUsers();
+  return users
+    .filter((u) => u.active && u.roles.includes(roleId))
+    .map((u) => ({ id: u.id, full_name: u.full_name, email: u.email }));
+}
+
 export async function createUser(input: {
   email: string;
   password: string;

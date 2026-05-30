@@ -31,10 +31,11 @@ type NavItem = {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   permission?: Permission; // sin permiso = visible para cualquier usuario autenticado
+  adminOnly?: boolean; // solo visible para admin (p.ej. el dashboard)
 };
 
 const NAV: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
   { href: "/productos", label: "Productos", icon: Package, permission: "productos" },
   { href: "/inventario", label: "Inventario", icon: Boxes, permission: "inventario" },
   { href: "/inventario/movimientos", label: "Movimientos", icon: ArrowLeftRight, permission: "movimientos" },
@@ -65,7 +66,10 @@ export function SidebarNav({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const items = NAV.filter((it) => !it.permission || roleListHasPermission(user.roles, it.permission));
+  const isAdmin = user.roles.includes("admin");
+  const items = NAV.filter((it) =>
+    it.adminOnly ? isAdmin : !it.permission || roleListHasPermission(user.roles, it.permission),
+  );
   return (
     <aside className="w-64 h-full border-r bg-sidebar text-sidebar-foreground flex flex-col">
       <div className="px-5 py-4 border-b shrink-0">

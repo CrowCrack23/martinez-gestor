@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus, Banknote } from "lucide-react";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, remittanceAssignee } from "@/lib/auth";
 import { listRemittances, REM_STATUS_BADGE, REM_STATUS_LABEL, REM_PAYOUT_LABEL, REM_ORIGIN_LABEL, REM_ORIGIN_CURRENCY } from "@/lib/remittances";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,9 +16,11 @@ function money(amount: number, currency: string) {
 }
 
 export default async function RemesasPage({ searchParams }: { searchParams: SP }) {
-  await requirePermission("remesas");
+  const user = await requirePermission("remesas");
   const sp = await searchParams;
-  const list = await listRemittances({ status: sp.status, origin: sp.origin });
+  const assignedTo = remittanceAssignee(user); // mensajero → solo sus remesas
+  const isCourier = assignedTo !== undefined;
+  const list = await listRemittances({ status: sp.status, origin: sp.origin, assignedTo });
   const originQs = sp.origin ? `&origin=${sp.origin}` : "";
   const statusQs = sp.status ? `&status=${sp.status}` : "";
   return (
@@ -26,12 +28,16 @@ export default async function RemesasPage({ searchParams }: { searchParams: SP }
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Remesas</h1>
-          <p className="text-sm text-muted-foreground">Operaciones de envío USD → entrega CUP al beneficiario.</p>
+          <p className="text-sm text-muted-foreground">
+            {isCourier ? "Remesas asignadas para entregar al beneficiario." : "Operaciones de envío USD → entrega CUP al beneficiario."}
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button asChild variant="outline"><Link href="/remesas/tasas"><Banknote className="size-4" />Tasas</Link></Button>
-          <Button asChild><Link href="/remesas/nueva"><Plus className="size-4" />Nueva remesa</Link></Button>
-        </div>
+        {!isCourier && (
+          <div className="flex gap-2">
+            <Button asChild variant="outline"><Link href="/remesas/tasas"><Banknote className="size-4" />Tasas</Link></Button>
+            <Button asChild><Link href="/remesas/nueva"><Plus className="size-4" />Nueva remesa</Link></Button>
+          </div>
+        )}
       </div>
       <Flash success={sp.success} error={sp.error} />
 

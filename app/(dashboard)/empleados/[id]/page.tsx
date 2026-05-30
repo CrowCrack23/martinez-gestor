@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { hasRole, requirePermission } from "@/lib/auth";
 import { getEmployee, listPositions } from "@/lib/hr";
 import { listWarehouses } from "@/lib/warehouses";
+import { listBusinessesLite } from "@/lib/businesses";
 import { listUsers } from "@/lib/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,10 +20,11 @@ type SP = Promise<{ error?: string; success?: string }>;
 export default async function EditarEmpleadoPage({ params, searchParams }: { params: Params; searchParams: SP }) {
   const user = await requirePermission("empleados");
   const { id } = await params;
-  const [emp, positions, warehouses, users, sp] = await Promise.all([
-    getEmployee(id), listPositions(), listWarehouses(), listUsers(), searchParams,
+  const [emp, positions, warehouses, businesses, users, sp] = await Promise.all([
+    getEmployee(id), listPositions(), listWarehouses(), listBusinessesLite(), listUsers(), searchParams,
   ]);
   if (!emp) notFound();
+  const businessOptions = businesses.filter((b) => b.kind === "tienda");
   const canDelete = hasRole(user, ["admin"]);
   const update = updateEmployeeAction.bind(null, emp.id);
   const remove = deleteEmployeeAction.bind(null, emp.id);
@@ -61,6 +63,14 @@ export default async function EditarEmpleadoPage({ params, searchParams }: { par
                   {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </Select>
               </div>
+            </div>
+            <div className="space-y-2 max-w-xs">
+              <Label htmlFor="business">Negocio (contabilidad)</Label>
+              <Select id="business" name="business" defaultValue={emp.business ?? ""}>
+                <option value="">— General —</option>
+                {businessOptions.map((b) => <option key={b.slug} value={b.slug}>{b.label}</option>)}
+              </Select>
+              <p className="text-xs text-muted-foreground">Su nómina se imputa a la contabilidad de este negocio.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2"><Label htmlFor="hire_date">Ingreso</Label><Input id="hire_date" name="hire_date" type="date" defaultValue={emp.hire_date ?? ""} /></div>

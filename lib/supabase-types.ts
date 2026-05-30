@@ -167,6 +167,19 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      // ── Negocios (dimensión contable: tiendas + remesas) ──
+      businesses: {
+        Row: { slug: string; label: string; code_prefix: string; kind: string; active: boolean; position: number };
+        Insert: { slug: string; label: string; code_prefix: string; kind?: string; active?: boolean; position?: number };
+        Update: Partial<{ label: string; code_prefix: string; kind: string; active: boolean; position: number }>;
+        Relationships: [];
+      };
+      journal_entry_counters: {
+        Row: { business: string; year: number; n: number };
+        Insert: { business: string; year: number; n?: number };
+        Update: Partial<{ n: number }>;
+        Relationships: [];
+      };
       warehouses: {
         Row: {
           id: string;
@@ -490,7 +503,7 @@ export type Database = {
           first_name: string; last_name: string;
           document_id: string; phone: string; email: string; address: string;
           hire_date: string | null; termination_date: string | null;
-          position_id: string | null; warehouse_id: string | null; app_user_id: string | null;
+          position_id: string | null; warehouse_id: string | null; business: string | null; app_user_id: string | null;
           monthly_salary: number; commission_rate: number; active: boolean; notes: string;
           created_at: string; updated_at: string;
         };
@@ -499,7 +512,7 @@ export type Database = {
           first_name: string; last_name?: string;
           document_id?: string; phone?: string; email?: string; address?: string;
           hire_date?: string | null; termination_date?: string | null;
-          position_id?: string | null; warehouse_id?: string | null; app_user_id?: string | null;
+          position_id?: string | null; warehouse_id?: string | null; business?: string | null; app_user_id?: string | null;
           monthly_salary?: number; commission_rate?: number; active?: boolean; notes?: string;
         };
         Update: Partial<Database["public"]["Tables"]["employees"]["Insert"]>;
@@ -659,6 +672,7 @@ export type Database = {
           payout_method: RemittancePayoutMethod;
           status: RemittanceStatus;
           notes: string;
+          assigned_to: string | null;
           created_by: string | null; paid_by: string | null; paid_at: string | null;
           created_at: string; updated_at: string;
         };
@@ -672,6 +686,7 @@ export type Database = {
           origin?: RemittanceOrigin;
           payout_method?: RemittancePayoutMethod;
           notes?: string;
+          assigned_to?: string | null;
           created_by?: string | null;
         };
         Update: {
@@ -684,6 +699,7 @@ export type Database = {
           payout_method?: RemittancePayoutMethod;
           status?: RemittanceStatus;
           notes?: string;
+          assigned_to?: string | null;
           paid_by?: string | null; paid_at?: string | null;
         };
         Relationships: [];
