@@ -123,6 +123,7 @@ export type Database = {
           password_hash: string;
           full_name: string;
           active: boolean;
+          auth_user_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -132,6 +133,7 @@ export type Database = {
           password_hash: string;
           full_name?: string;
           active?: boolean;
+          auth_user_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["app_users"]["Insert"]>;
         Relationships: [];
@@ -165,6 +167,24 @@ export type Database = {
         };
         Insert: { user_id: string; store_slug: string };
         Update: never;
+        Relationships: [];
+      };
+      // ── Membresía: rol de un usuario dentro de un negocio ──
+      business_members: {
+        Row: {
+          user_id: string;
+          business_slug: string;
+          role_id: string;
+          commission_pct: number;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          business_slug: string;
+          role_id: string;
+          commission_pct?: number;
+        };
+        Update: Partial<{ commission_pct: number }>;
         Relationships: [];
       };
       // ── Negocios (dimensión contable: tiendas + remesas) ──
@@ -673,6 +693,8 @@ export type Database = {
           status: RemittanceStatus;
           notes: string;
           assigned_to: string | null;
+          gestor_id: string | null;
+          gestor_commission_usd: number;
           created_by: string | null; paid_by: string | null; paid_at: string | null;
           created_at: string; updated_at: string;
         };
@@ -687,6 +709,8 @@ export type Database = {
           payout_method?: RemittancePayoutMethod;
           notes?: string;
           assigned_to?: string | null;
+          gestor_id?: string | null;
+          gestor_commission_usd?: number;
           created_by?: string | null;
         };
         Update: {
@@ -700,6 +724,8 @@ export type Database = {
           status?: RemittanceStatus;
           notes?: string;
           assigned_to?: string | null;
+          gestor_id?: string | null;
+          gestor_commission_usd?: number;
           paid_by?: string | null; paid_at?: string | null;
         };
         Relationships: [];

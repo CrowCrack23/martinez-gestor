@@ -2,6 +2,12 @@ import "server-only";
 import { randomBytes, scryptSync } from "node:crypto";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
+import {
+  deleteAuthUser,
+  ensureAuthUser,
+  setAuthUserBanned,
+  setAuthUserPassword,
+} from "./mobile-auth";
 
 const TAG = "app_users";
 
@@ -90,10 +96,11 @@ export async function createUser(input: {
   businesses: string[];
 }): Promise<string> {
   const sb = getSupabase();
+  const username = input.username.toLowerCase();
   const { data, error } = await sb
     .from("app_users")
     .insert({
-      username: input.username.toLowerCase(),
+      username,
       password_hash: hashPassword(input.password),
       full_name: input.full_name,
       active: true,
@@ -101,6 +108,13 @@ export async function createUser(input: {
     .select("id")
     .single();
   if (error) throw error;
+  // Aprovisiona la cuenta de Supabase Auth (acceso a la app móvil) y la vincula.
+  const authUserId = await ensureAuthUser(username, input.password, input.full_name);
+  const { error: linkErr } = await sb
+    .from("app_users")
+    .update({ auth_user_id: authUserId })
+    .eq("id", data.id);
+  if (linkErr) throw linkErr;
   if (input.roles.length > 0) {
     const rows = input.roles.map((role_id) => ({ user_id: data.id, role_id }));
     const { error: rErr } = await sb.from("user_roles").insert(rows);
@@ -120,6 +134,13 @@ export async function updateUser(
   patch: { full_name?: string; active?: boolean; password?: string; roles?: string[]; businesses?: string[] },
 ): Promise<void> {
   const sb = getSupabase();
+  const { data: current, error: curErr } = await sb
+    .from("app_users")
+    .select("username, full_name, auth_user_id")
+    .eq("id", id)
+    .single();
+  if (curErr) throw curErr;
+
   const userPatch: { full_name?: string; active?: boolean; password_hash?: string } = {};
   if (patch.full_name !== undefined) userPatch.full_name = patch.full_name;
   if (patch.active !== undefined) userPatch.active = patch.active;
@@ -127,6 +148,25 @@ export async function updateUser(
   if (Object.keys(userPatch).length > 0) {
     const { error } = await sb.from("app_users").update(userPatch).eq("id", id);
     if (error) throw error;
+  }
+
+  // Sincroniza la cuenta de Supabase Auth (acceso a la app móvil).
+  const fullName = patch.full_name ?? current.full_name;
+  if (patch.password) {
+    if (current.auth_user_id) {
+      await setAuthUserPassword(current.auth_user_id, patch.password);
+    } else {
+      // Aún sin cuenta de Auth (usuario antiguo): crearla y vincularla.
+      const authUserId = await ensureAuthUser(current.username, patch.password, fullName);
+      const { error: linkErr } = await sb
+        .from("app_users")
+        .update({ auth_user_id: authUserId })
+        .eq("id", id);
+      if (linkErr) throw linkErr;
+    }
+  }
+  if (patch.active !== undefined && current.auth_user_id) {
+    await setAuthUserBanned(current.auth_user_id, !patch.active);
   }
   if (patch.roles) {
     await sb.from("user_roles").delete().eq("user_id", id);
@@ -149,6 +189,13 @@ export async function updateUser(
 
 export async function deleteUser(id: string): Promise<void> {
   const sb = getSupabase();
+  const { data: current } = await sb
+    .from("app_users")
+    .select("auth_user_id")
+    .eq("id", id)
+    .maybeSingle();
+  // Borra primero la cuenta de Auth para que no quede acceso móvil huérfano.
+  if (current?.auth_user_id) await deleteAuthUser(current.auth_user_id);
   const { error } = await sb.from("app_users").delete().eq("id", id);
   if (error) throw error;
   bust();

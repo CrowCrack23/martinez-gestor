@@ -36,7 +36,15 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
-export type RoleId = "admin" | "almacenero" | "vendedor" | "contador" | "rrhh" | "mensajero";
+export type RoleId =
+  | "admin"
+  | "almacenero"
+  | "vendedor"
+  | "contador"
+  | "rrhh"
+  | "mensajero"
+  | "gestor"
+  | "encargado_remesas";
 
 const ALL = "*" as const;
 
@@ -69,9 +77,12 @@ export const ROLE_PERMISSIONS: Record<RoleId, Permission[] | typeof ALL> = {
     "contabilidad",
   ],
   rrhh: ["empleados", "asistencia", "nomina"],
-  // Mensajero: solo entra al módulo de remesas; dentro, las páginas lo limitan a
-  // las remesas que tiene asignadas (ver remittanceAssignee en lib/auth.ts).
+  // Roles del negocio "remesas" (modelo por membresía, migración 0022). Todos
+  // entran al módulo remesas; el alcance fino (qué remesas ve/opera cada uno) lo
+  // imponen la RLS y las páginas según su rol dentro del negocio.
   mensajero: ["remesas"],
+  gestor: ["remesas"],
+  encargado_remesas: ["remesas"],
 };
 
 /** Conjunto de permisos efectivos de un usuario según sus roles. */
@@ -140,4 +151,6 @@ export const ROLE_LABEL: Record<RoleId, string> = {
   contador: "Contador",
   rrhh: "Recursos Humanos",
   mensajero: "Mensajero",
+  gestor: "Gestor",
+  encargado_remesas: "Encargado de remesas",
 };

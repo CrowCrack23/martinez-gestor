@@ -13,16 +13,26 @@ import {
 } from "./session";
 import { roleListHasPermission, type Permission } from "./permissions";
 
+export type Membership = { business: string; role: string; commissionPct: number };
+
 export type CurrentUser = {
   id: string;
   username: string;
   fullName: string;
+  /** Roles efectivos: globales (user_roles) ∪ por negocio (business_members). */
   roles: string[];
   /** Tiendas (negocios) a las que el usuario está asignado. */
   businesses: string[];
+  /** Rol por negocio (modelo de membresía, migración 0022). */
+  memberships: Membership[];
   /** true si ve todos los negocios (rol admin). */
   allBusinesses: boolean;
 };
+
+/** Rol(es) explícitos del usuario dentro de un negocio dado. */
+export function rolesInBusiness(user: CurrentUser, business: string): string[] {
+  return user.memberships.filter((m) => m.business === business).map((m) => m.role);
+}
 
 /**
  * Alcance de negocios para filtrar consultas:
@@ -78,17 +88,26 @@ const loadUser = unstable_cache(
       .eq("id", userId)
       .maybeSingle();
     if (error || !u || !u.active) return null;
-    const [{ data: rs }, { data: bs }] = await Promise.all([
+    const [{ data: rs }, { data: bs }, { data: ms }] = await Promise.all([
       sb.from("user_roles").select("role_id").eq("user_id", userId),
       sb.from("user_businesses").select("store_slug").eq("user_id", userId),
+      sb.from("business_members").select("business_slug,role_id,commission_pct").eq("user_id", userId),
     ]);
-    const roles = (rs ?? []).map((r) => r.role_id);
+    const memberships = (ms ?? []).map((m) => ({
+      business: m.business_slug,
+      role: m.role_id,
+      commissionPct: Number(m.commission_pct),
+    }));
+    const roles = Array.from(
+      new Set([...(rs ?? []).map((r) => r.role_id), ...memberships.map((m) => m.role)]),
+    );
     return {
       id: u.id,
       username: u.username,
       fullName: u.full_name,
       roles,
       businesses: (bs ?? []).map((b) => b.store_slug),
+      memberships,
       allBusinesses: roles.includes("admin"),
     };
   },
@@ -151,11 +170,19 @@ export async function signIn(username: string, password: string): Promise<Curren
   if (!verifyPasswordAgainstHash(password, u.password_hash)) {
     throw new Error("Credenciales inválidas.");
   }
-  const [{ data: rs }, { data: bs }] = await Promise.all([
+  const [{ data: rs }, { data: bs }, { data: ms }] = await Promise.all([
     sb.from("user_roles").select("role_id").eq("user_id", u.id),
     sb.from("user_businesses").select("store_slug").eq("user_id", u.id),
+    sb.from("business_members").select("business_slug,role_id,commission_pct").eq("user_id", u.id),
   ]);
-  const roles = (rs ?? []).map((r) => r.role_id);
+  const memberships = (ms ?? []).map((m) => ({
+    business: m.business_slug,
+    role: m.role_id,
+    commissionPct: Number(m.commission_pct),
+  }));
+  const roles = Array.from(
+    new Set([...(rs ?? []).map((r) => r.role_id), ...memberships.map((m) => m.role)]),
+  );
 
   const token = await createSessionToken(u.id, getSessionSecret());
   const jar = await cookies();
@@ -173,6 +200,7 @@ export async function signIn(username: string, password: string): Promise<Curren
     fullName: u.full_name,
     roles,
     businesses: (bs ?? []).map((b) => b.store_slug),
+    memberships,
     allBusinesses: roles.includes("admin"),
   };
 }
