@@ -59,3 +59,11 @@ export function requireEmail(form: FormData, key: string): string {
   }
   return raw;
 }
+
+export function requireUsername(form: FormData, key: string): string {
+  const raw = requireString(form, key, "Usuario").toLowerCase();
+  if (!/^[a-z0-9._-]{3,32}$/.test(raw)) {
+    throw new ValidationError("El usuario debe tener entre 3 y 32 caracteres: letras, números, punto, guion o guion bajo.");
+  }
+  return raw;
+}

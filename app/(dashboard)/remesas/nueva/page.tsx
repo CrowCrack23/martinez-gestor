@@ -61,7 +61,7 @@ export default async function NuevaRemesaPage({ searchParams }: { searchParams: 
               <Label htmlFor="assigned_to">Mensajero</Label>
               <Select id="assigned_to" name="assigned_to" defaultValue="">
                 <option value="">— Sin asignar —</option>
-                {couriers.map((c) => <option key={c.id} value={c.id}>{c.full_name || c.email}</option>)}
+                {couriers.map((c) => <option key={c.id} value={c.id}>{c.full_name || c.username}</option>)}
               </Select>
               <p className="text-xs text-muted-foreground">Quién lleva el dinero al beneficiario. Verá esta remesa en su lista.</p>
             </div>

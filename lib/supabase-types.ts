@@ -119,7 +119,7 @@ export type Database = {
       app_users: {
         Row: {
           id: string;
-          email: string;
+          username: string;
           password_hash: string;
           full_name: string;
           active: boolean;
@@ -128,7 +128,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          email: string;
+          username: string;
           password_hash: string;
           full_name?: string;
           active?: boolean;

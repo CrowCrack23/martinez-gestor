@@ -245,11 +245,11 @@ export const listMovements = unstable_cache(
         ? sb.from("warehouses").select("id,name").in("id", Array.from(wIds))
         : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
       uIds.size > 0
-        ? sb.from("app_users").select("id,full_name,email").in("id", Array.from(uIds))
-        : Promise.resolve({ data: [] as { id: string; full_name: string; email: string }[], error: null }),
+        ? sb.from("app_users").select("id,full_name,username").in("id", Array.from(uIds))
+        : Promise.resolve({ data: [] as { id: string; full_name: string; username: string }[], error: null }),
     ]);
     const wMap = new Map((wRes.data ?? []).map((w) => [w.id, w.name]));
-    const uMap = new Map((uRes.data ?? []).map((u) => [u.id, u.full_name || u.email]));
+    const uMap = new Map((uRes.data ?? []).map((u) => [u.id, u.full_name || u.username]));
 
     return rows.map((m) => {
       const lines = m.inventory_movement_lines ?? [];

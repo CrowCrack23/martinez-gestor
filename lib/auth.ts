@@ -15,7 +15,7 @@ import { roleListHasPermission, type Permission } from "./permissions";
 
 export type CurrentUser = {
   id: string;
-  email: string;
+  username: string;
   fullName: string;
   roles: string[];
   /** Tiendas (negocios) a las que el usuario está asignado. */
@@ -74,7 +74,7 @@ const loadUser = unstable_cache(
     const sb = getSupabase();
     const { data: u, error } = await sb
       .from("app_users")
-      .select("id,email,full_name,active")
+      .select("id,username,full_name,active")
       .eq("id", userId)
       .maybeSingle();
     if (error || !u || !u.active) return null;
@@ -85,7 +85,7 @@ const loadUser = unstable_cache(
     const roles = (rs ?? []).map((r) => r.role_id);
     return {
       id: u.id,
-      email: u.email,
+      username: u.username,
       fullName: u.full_name,
       roles,
       businesses: (bs ?? []).map((b) => b.store_slug),
@@ -138,12 +138,12 @@ export async function requirePermission(perm: Permission): Promise<CurrentUser> 
   return u;
 }
 
-export async function signIn(email: string, password: string): Promise<CurrentUser> {
+export async function signIn(username: string, password: string): Promise<CurrentUser> {
   const sb = getSupabase();
   const { data: u, error } = await sb
     .from("app_users")
-    .select("id,email,password_hash,full_name,active")
-    .eq("email", email.toLowerCase())
+    .select("id,username,password_hash,full_name,active")
+    .eq("username", username.trim().toLowerCase())
     .maybeSingle();
   if (error || !u || !u.active) {
     throw new Error("Credenciales inválidas.");
@@ -169,7 +169,7 @@ export async function signIn(email: string, password: string): Promise<CurrentUs
 
   return {
     id: u.id,
-    email: u.email,
+    username: u.username,
     fullName: u.full_name,
     roles,
     businesses: (bs ?? []).map((b) => b.store_slug),

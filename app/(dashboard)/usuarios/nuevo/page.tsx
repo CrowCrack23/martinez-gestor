@@ -26,8 +26,9 @@ export default async function NuevoUsuarioPage({ searchParams }: { searchParams:
               <Input id="full_name" name="full_name" required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" required />
+              <Label htmlFor="username">Usuario</Label>
+              <Input id="username" name="username" type="text" autoCapitalize="none" spellCheck={false} required minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]{3,32}" />
+              <p className="text-xs text-muted-foreground">3–32 caracteres: letras, números, punto, guion o guion bajo.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Contraseña</Label>

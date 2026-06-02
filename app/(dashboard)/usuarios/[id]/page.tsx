@@ -26,8 +26,8 @@ export default async function EditarUsuarioPage({ params, searchParams }: { para
   return (
     <div className="max-w-xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">{user.full_name || user.email}</h1>
-        <p className="text-sm text-muted-foreground">{user.email}</p>
+        <h1 className="text-2xl font-semibold">{user.full_name || user.username}</h1>
+        <p className="text-sm text-muted-foreground">@{user.username}</p>
       </div>
       <Flash error={sp.error} />
       <Card>

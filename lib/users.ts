@@ -11,7 +11,7 @@ function bust() {
 
 export type AppUserWithRoles = {
   id: string;
-  email: string;
+  username: string;
   full_name: string;
   active: boolean;
   created_at: string;
@@ -43,7 +43,7 @@ export const listUsers = unstable_cache(
     const sb = getSupabase();
     const { data: users, error } = await sb
       .from("app_users")
-      .select("id,email,full_name,active,created_at")
+      .select("id,username,full_name,active,created_at")
       .order("created_at", { ascending: false });
     if (error) throw error;
     if (!users || users.length === 0) return [];
@@ -75,15 +75,15 @@ export const listUsers = unstable_cache(
 );
 
 /** Usuarios activos que tienen un rol dado (p.ej. mensajeros para asignar remesas). */
-export async function listUsersByRole(roleId: string): Promise<{ id: string; full_name: string; email: string }[]> {
+export async function listUsersByRole(roleId: string): Promise<{ id: string; full_name: string; username: string }[]> {
   const users = await listUsers();
   return users
     .filter((u) => u.active && u.roles.includes(roleId))
-    .map((u) => ({ id: u.id, full_name: u.full_name, email: u.email }));
+    .map((u) => ({ id: u.id, full_name: u.full_name, username: u.username }));
 }
 
 export async function createUser(input: {
-  email: string;
+  username: string;
   password: string;
   full_name: string;
   roles: string[];
@@ -93,7 +93,7 @@ export async function createUser(input: {
   const { data, error } = await sb
     .from("app_users")
     .insert({
-      email: input.email.toLowerCase(),
+      username: input.username.toLowerCase(),
       password_hash: hashPassword(input.password),
       full_name: input.full_name,
       active: true,

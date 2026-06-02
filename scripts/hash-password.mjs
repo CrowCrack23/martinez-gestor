@@ -2,7 +2,7 @@
 // Uso:
 //   node scripts/hash-password.mjs <password>         → imprime hash
 //   node scripts/hash-password.mjs --secret           → imprime SESSION_SECRET
-//   node scripts/hash-password.mjs --create <email> <password> <fullName> [rol1,rol2]
+//   node scripts/hash-password.mjs --create <username> <password> <fullName> [rol1,rol2]
 //     → inserta el usuario en Supabase y le asigna los roles indicados (admin por defecto).
 import { scryptSync, randomBytes } from "node:crypto";
 
@@ -22,9 +22,9 @@ if (args[0] === "--secret") {
 }
 
 if (args[0] === "--create") {
-  const [, email, password, fullName = "", rolesArg = "admin"] = args;
-  if (!email || !password) {
-    console.error("Uso: node scripts/hash-password.mjs --create <email> <password> [fullName] [rol1,rol2]");
+  const [, username, password, fullName = "", rolesArg = "admin"] = args;
+  if (!username || !password) {
+    console.error("Uso: node scripts/hash-password.mjs --create <username> <password> [fullName] [rol1,rol2]");
     process.exit(1);
   }
   const url = process.env.SUPABASE_URL;
@@ -38,7 +38,7 @@ if (args[0] === "--create") {
   const password_hash = hash(password);
   const { data: user, error } = await sb
     .from("app_users")
-    .upsert({ email: email.toLowerCase(), password_hash, full_name: fullName, active: true }, { onConflict: "email" })
+    .upsert({ username: username.toLowerCase(), password_hash, full_name: fullName, active: true }, { onConflict: "username" })
     .select()
     .single();
   if (error) { console.error(error); process.exit(1); }
@@ -48,7 +48,7 @@ if (args[0] === "--create") {
     const { error: rErr } = await sb.from("user_roles").upsert(rows);
     if (rErr) { console.error(rErr); process.exit(1); }
   }
-  console.log(`✓ Usuario ${email} creado/actualizado con roles: ${roles.join(", ") || "(ninguno)"}`);
+  console.log(`✓ Usuario ${username} creado/actualizado con roles: ${roles.join(", ") || "(ninguno)"}`);
   process.exit(0);
 }
 

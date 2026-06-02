@@ -37,7 +37,7 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
   const editable = pending && !isCourier;        // el mensajero no edita los datos
   const canDelete = hasRole(user, ["admin"]) && r.status !== "entregada";
   const cur = REM_ORIGIN_CURRENCY[r.origin];
-  const courierName = r.assigned_to ? (couriers.find((c) => c.id === r.assigned_to)?.full_name || couriers.find((c) => c.id === r.assigned_to)?.email || "—") : "—";
+  const courierName = r.assigned_to ? (couriers.find((c) => c.id === r.assigned_to)?.full_name || couriers.find((c) => c.id === r.assigned_to)?.username || "—") : "—";
 
   const update = updateRemittanceAction.bind(null, r.id);
   const pay = payRemittanceAction.bind(null, r.id);
@@ -111,7 +111,7 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
                 <Label htmlFor="assigned_to">Mensajero</Label>
                 <Select id="assigned_to" name="assigned_to" defaultValue={r.assigned_to ?? ""}>
                   <option value="">— Sin asignar —</option>
-                  {couriers.map((c) => <option key={c.id} value={c.id}>{c.full_name || c.email}</option>)}
+                  {couriers.map((c) => <option key={c.id} value={c.id}>{c.full_name || c.username}</option>)}
                 </Select>
                 <p className="text-xs text-muted-foreground">Quién lleva el dinero al beneficiario.</p>
               </div>

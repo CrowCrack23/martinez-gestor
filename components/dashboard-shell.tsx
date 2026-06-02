@@ -10,7 +10,7 @@ export function DashboardShell({
   signOutAction,
   children,
 }: {
-  user: { fullName: string; email: string; roles: string[] };
+  user: { fullName: string; username: string; roles: string[] };
   signOutAction: () => void;
   children: React.ReactNode;
 }) {

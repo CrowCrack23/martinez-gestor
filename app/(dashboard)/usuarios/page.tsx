@@ -30,7 +30,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: SP 
           <thead className="text-left text-muted-foreground border-b">
             <tr>
               <th className="px-4 py-3 font-medium">Nombre</th>
-              <th className="px-4 py-3 font-medium">Email</th>
+              <th className="px-4 py-3 font-medium">Usuario</th>
               <th className="px-4 py-3 font-medium">Roles</th>
               <th className="px-4 py-3 font-medium">Estado</th>
               <th className="px-4 py-3 font-medium">Creado</th>
@@ -40,13 +40,13 @@ export default async function UsuariosPage({ searchParams }: { searchParams: SP 
           <tbody>
             {users.length === 0 && (
               <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                Sin usuarios. Crea el primero con el script: <code>node scripts/hash-password.mjs --create email password &quot;Nombre&quot; admin</code>
+                Sin usuarios. Crea el primero con el script: <code>node scripts/hash-password.mjs --create usuario password &quot;Nombre&quot; admin</code>
               </td></tr>
             )}
             {users.map((u) => (
               <tr key={u.id} className="border-b last:border-b-0 hover:bg-muted/30">
                 <td className="px-4 py-3 font-medium">{u.full_name || <span className="text-muted-foreground">—</span>}</td>
-                <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
+                <td className="px-4 py-3 text-muted-foreground">@{u.username}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1 flex-wrap">
                     {u.roles.length === 0 && <span className="text-muted-foreground text-xs">sin rol</span>}

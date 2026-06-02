@@ -61,7 +61,7 @@ export function SidebarNav({
   signOutAction,
   onNavigate,
 }: {
-  user: { fullName: string; email: string; roles: string[] };
+  user: { fullName: string; username: string; roles: string[] };
   signOutAction: () => void;
   onNavigate?: () => void;
 }) {
@@ -101,7 +101,7 @@ export function SidebarNav({
       </nav>
       <div className="p-3 border-t shrink-0">
         <div className="px-3 py-2 text-xs">
-          <div className="font-medium text-foreground truncate">{user.fullName || user.email}</div>
+          <div className="font-medium text-foreground truncate">{user.fullName || user.username}</div>
           <div className="text-muted-foreground truncate">{user.roles.join(", ") || "sin rol"}</div>
         </div>
         <form action={signOutAction}>

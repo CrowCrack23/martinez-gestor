@@ -10,12 +10,12 @@ type SearchParams = Promise<{ next?: string; error?: string }>;
 
 async function loginAction(formData: FormData) {
   "use server";
-  const email = String(formData.get("email") ?? "");
+  const username = String(formData.get("username") ?? "");
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "/");
   let dest = next || "/";
   try {
-    const u = await signIn(email, password);
+    const u = await signIn(username, password);
     // Sin destino explícito (o "/"), aterrizar en la sección que le corresponde:
     // admin → dashboard; el resto → su primera sección permitida.
     if (dest === "/") dest = landingPathForRoles(u.roles);
@@ -41,8 +41,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
           <form action={loginAction} className="space-y-4">
             <input type="hidden" name="next" value={next} />
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" autoComplete="username" required autoFocus />
+              <Label htmlFor="username">Usuario</Label>
+              <Input id="username" name="username" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} required autoFocus />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Contraseña</Label>

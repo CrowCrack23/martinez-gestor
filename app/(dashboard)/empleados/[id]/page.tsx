@@ -87,7 +87,7 @@ export default async function EditarEmpleadoPage({ params, searchParams }: { par
                 <Label htmlFor="app_user_id">Usuario enlazado</Label>
                 <Select id="app_user_id" name="app_user_id" defaultValue={emp.app_user_id ?? ""}>
                   <option value="">— Ninguno —</option>
-                  {users.map((u) => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
+                  {users.map((u) => <option key={u.id} value={u.id}>{u.full_name || u.username}</option>)}
                 </Select>
                 <p className="text-xs text-muted-foreground">Necesario para la comisión.</p>
               </div>

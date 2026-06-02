@@ -2,7 +2,7 @@
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createUser, deleteUser, updateUser } from "@/lib/users";
-import { optionalString, requireEmail, requireString, ValidationError } from "@/lib/validation";
+import { optionalString, requireUsername, requireString, ValidationError } from "@/lib/validation";
 
 function parseRoles(form: FormData): string[] {
   return form.getAll("roles").map((v) => String(v)).filter(Boolean);
@@ -18,7 +18,7 @@ export async function createUserAction(formData: FormData) {
     const password = requireString(formData, "password", "Contraseña");
     if (password.length < 8) throw new ValidationError("La contraseña debe tener al menos 8 caracteres.");
     await createUser({
-      email: requireEmail(formData, "email"),
+      username: requireUsername(formData, "username"),
       password,
       full_name: optionalString(formData, "full_name"),
       roles: parseRoles(formData),
