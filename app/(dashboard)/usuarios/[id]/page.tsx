@@ -2,12 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth";
 import { listRoles, listUsers } from "@/lib/users";
+import { REMESAS_ROLES } from "@/lib/permissions";
 import { listStoresLite } from "@/lib/stores-lite";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
+import { RemesasMembershipEditor } from "@/components/remesas-membership-editor";
 import { deleteUserAction, updateUserAction } from "../actions";
 
 type Params = Promise<{ id: string }>;
@@ -15,10 +17,14 @@ type SP = Promise<{ error?: string }>;
 
 export default async function EditarUsuarioPage({ params, searchParams }: { params: Params; searchParams: SP }) {
   const current = await requirePermission("usuarios");
-  const [{ id }, users, roles, stores, sp] = await Promise.all([params, listUsers(), listRoles(), listStoresLite(), searchParams]);
+  const [{ id }, users, allRoles, stores, sp] = await Promise.all([params, listUsers(), listRoles(), listStoresLite(), searchParams]);
   const user = users.find((u) => u.id === id);
   if (!user) notFound();
   const isSelf = current.id === user.id;
+  const roles = allRoles.filter((r) => !(REMESAS_ROLES as readonly string[]).includes(r.id));
+  const remesasMemberships = user.memberships.filter((m) => m.business === "remesas");
+  const remesasRoles = remesasMemberships.map((m) => m.role);
+  const gestorPct = remesasMemberships.find((m) => m.role === "gestor")?.commission_pct ?? 0;
 
   const update = updateUserAction.bind(null, user.id);
   const remove = deleteUserAction.bind(null, user.id);
@@ -67,6 +73,7 @@ export default async function EditarUsuarioPage({ params, searchParams }: { para
                 ))}
               </div>
             </div>
+            <RemesasMembershipEditor initialRoles={remesasRoles} initialCommissionPct={gestorPct} />
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" name="active" defaultChecked={user.active} disabled={isSelf} className="size-4" />
               Activo {isSelf && <span className="text-xs text-muted-foreground">(no puedes desactivarte a ti mismo)</span>}

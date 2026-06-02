@@ -1,19 +1,22 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth";
 import { listRoles } from "@/lib/users";
+import { REMESAS_ROLES } from "@/lib/permissions";
 import { listStoresLite } from "@/lib/stores-lite";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
+import { RemesasMembershipEditor } from "@/components/remesas-membership-editor";
 import { createUserAction } from "../actions";
 
 type SP = Promise<{ error?: string }>;
 
 export default async function NuevoUsuarioPage({ searchParams }: { searchParams: SP }) {
   await requirePermission("usuarios");
-  const [roles, stores, sp] = await Promise.all([listRoles(), listStoresLite(), searchParams]);
+  const [allRoles, stores, sp] = await Promise.all([listRoles(), listStoresLite(), searchParams]);
+  const roles = allRoles.filter((r) => !(REMESAS_ROLES as readonly string[]).includes(r.id));
   return (
     <div className="max-w-xl space-y-6">
       <h1 className="text-2xl font-semibold">Nuevo usuario</h1>
@@ -61,6 +64,7 @@ export default async function NuevoUsuarioPage({ searchParams }: { searchParams:
                 ))}
               </div>
             </div>
+            <RemesasMembershipEditor />
             <div className="flex gap-2 justify-end pt-2">
               <Button asChild variant="ghost"><Link href="/usuarios">Cancelar</Link></Button>
               <Button type="submit">Crear</Button>

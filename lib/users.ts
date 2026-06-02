@@ -15,6 +15,8 @@ function bust() {
   revalidateTag(TAG, "max");
 }
 
+export type Membership = { business: string; role: string; commission_pct: number };
+
 export type AppUserWithRoles = {
   id: string;
   username: string;
@@ -23,6 +25,7 @@ export type AppUserWithRoles = {
   created_at: string;
   roles: string[];
   businesses: string[];
+  memberships: Membership[];
 };
 
 export type Role = { id: string; name: string; description: string };
@@ -54,9 +57,10 @@ export const listUsers = unstable_cache(
     if (error) throw error;
     if (!users || users.length === 0) return [];
     const ids = users.map((u) => u.id);
-    const [{ data: roles }, { data: biz }] = await Promise.all([
+    const [{ data: roles }, { data: biz }, { data: mem }] = await Promise.all([
       sb.from("user_roles").select("user_id,role_id").in("user_id", ids),
       sb.from("user_businesses").select("user_id,store_slug").in("user_id", ids),
+      sb.from("business_members").select("user_id,business_slug,role_id,commission_pct").in("user_id", ids),
     ]);
     const rolesByUser = new Map<string, string[]>();
     for (const r of roles ?? []) {
@@ -70,10 +74,17 @@ export const listUsers = unstable_cache(
       arr.push(b.store_slug);
       bizByUser.set(b.user_id, arr);
     }
+    const memByUser = new Map<string, Membership[]>();
+    for (const m of mem ?? []) {
+      const arr = memByUser.get(m.user_id) ?? [];
+      arr.push({ business: m.business_slug, role: m.role_id, commission_pct: Number(m.commission_pct) });
+      memByUser.set(m.user_id, arr);
+    }
     return users.map((u) => ({
       ...u,
       roles: rolesByUser.get(u.id) ?? [],
       businesses: bizByUser.get(u.id) ?? [],
+      memberships: memByUser.get(u.id) ?? [],
     }));
   },
   ["users_all"],
@@ -94,6 +105,8 @@ export async function createUser(input: {
   full_name: string;
   roles: string[];
   businesses: string[];
+  /** Rol(es) dentro del negocio "remesas" (modelo por membresía). */
+  remesasMemberships?: { role: string; commission_pct: number }[];
 }): Promise<string> {
   const sb = getSupabase();
   const username = input.username.toLowerCase();
@@ -125,13 +138,40 @@ export async function createUser(input: {
     const { error: bErr } = await sb.from("user_businesses").insert(rows);
     if (bErr) throw bErr;
   }
+  await setRemesasMemberships(data.id, input.remesasMemberships ?? []);
   bust();
   return data.id;
 }
 
+/** Reemplaza las membresías del usuario en el negocio "remesas". */
+async function setRemesasMemberships(
+  userId: string,
+  memberships: { role: string; commission_pct: number }[],
+): Promise<void> {
+  const sb = getSupabase();
+  await sb.from("business_members").delete().eq("user_id", userId).eq("business_slug", "remesas");
+  if (memberships.length > 0) {
+    const rows = memberships.map((m) => ({
+      user_id: userId,
+      business_slug: "remesas",
+      role_id: m.role,
+      commission_pct: m.role === "gestor" ? m.commission_pct : 0,
+    }));
+    const { error } = await sb.from("business_members").insert(rows);
+    if (error) throw error;
+  }
+}
+
 export async function updateUser(
   id: string,
-  patch: { full_name?: string; active?: boolean; password?: string; roles?: string[]; businesses?: string[] },
+  patch: {
+    full_name?: string;
+    active?: boolean;
+    password?: string;
+    roles?: string[];
+    businesses?: string[];
+    remesasMemberships?: { role: string; commission_pct: number }[];
+  },
 ): Promise<void> {
   const sb = getSupabase();
   const { data: current, error: curErr } = await sb
@@ -183,6 +223,9 @@ export async function updateUser(
       const { error: bErr } = await sb.from("user_businesses").insert(rows);
       if (bErr) throw bErr;
     }
+  }
+  if (patch.remesasMemberships) {
+    await setRemesasMemberships(id, patch.remesasMemberships);
   }
   bust();
 }

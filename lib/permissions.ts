@@ -36,6 +36,14 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
+/**
+ * Roles del negocio "remesas" (modelo por membresía, migración 0022). Se asignan
+ * por negocio en business_members, NO como roles globales — por eso se excluyen
+ * de la lista de roles globales en la UI de /usuarios.
+ */
+export const REMESAS_ROLES = ["encargado_remesas", "gestor", "mensajero"] as const;
+export type RemesasRole = (typeof REMESAS_ROLES)[number];
+
 export type RoleId =
   | "admin"
   | "almacenero"
