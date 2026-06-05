@@ -528,6 +528,162 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      // ── Socios por negocio (no son usuarios del sistema) ──
+      business_partners: {
+        Row: {
+          id: string;
+          business_slug: string;
+          name: string;
+          profit_pct: number;
+          app_user_id: string | null;
+          active: boolean;
+          notes: string;
+          position: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_slug: string;
+          name: string;
+          profit_pct?: number;
+          app_user_id?: string | null;
+          active?: boolean;
+          notes?: string;
+          position?: number;
+        };
+        Update: Partial<{
+          name: string;
+          profit_pct: number;
+          app_user_id: string | null;
+          active: boolean;
+          notes: string;
+          position: number;
+        }>;
+        Relationships: [];
+      };
+      // ── % de crecimiento de la empresa (reinversión) por negocio ──
+      business_settings: {
+        Row: {
+          business_slug: string;
+          growth_pct: number;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          business_slug: string;
+          growth_pct?: number;
+          updated_by?: string | null;
+        };
+        Update: Partial<{ growth_pct: number; updated_by: string | null }>;
+        Relationships: [];
+      };
+      // ── Aportes de capital de los socios ──
+      capital_contributions: {
+        Row: {
+          id: string;
+          business_slug: string;
+          partner_id: string;
+          amount: number;
+          currency: "CUP" | "USD";
+          contributed_at: string;
+          journal_entry_id: string | null;
+          notes: string;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_slug: string;
+          partner_id: string;
+          amount: number;
+          currency?: "CUP" | "USD";
+          contributed_at?: string;
+          journal_entry_id?: string | null;
+          notes?: string;
+          created_by?: string | null;
+        };
+        Update: Partial<{ journal_entry_id: string | null; notes: string }>;
+        Relationships: [];
+      };
+      // ── Infraestructura (inversión fija, sin depreciación) ──
+      fixed_assets: {
+        Row: {
+          id: string;
+          business_slug: string;
+          name: string;
+          amount: number;
+          acquired_at: string;
+          notes: string;
+          journal_entry_id: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_slug: string;
+          name: string;
+          amount: number;
+          acquired_at?: string;
+          notes?: string;
+          journal_entry_id?: string | null;
+          created_by?: string | null;
+        };
+        Update: Partial<{ name: string; amount: number; acquired_at: string; notes: string; journal_entry_id: string | null }>;
+        Relationships: [];
+      };
+      // ── Reparto mensual de ganancias (snapshot confirmado) ──
+      profit_distributions: {
+        Row: {
+          id: string;
+          business_slug: string;
+          period_month: string;
+          base_profit: number;
+          growth_pct: number;
+          growth_amount: number;
+          distributable: number;
+          include_drafts: boolean;
+          status: "calculada" | "pagada_parcial" | "pagada";
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_slug: string;
+          period_month: string;
+          base_profit: number;
+          growth_pct?: number;
+          growth_amount?: number;
+          distributable?: number;
+          include_drafts?: boolean;
+          status?: "calculada" | "pagada_parcial" | "pagada";
+          created_by?: string | null;
+        };
+        Update: Partial<{ status: "calculada" | "pagada_parcial" | "pagada" }>;
+        Relationships: [];
+      };
+      profit_distribution_lines: {
+        Row: {
+          id: string;
+          distribution_id: string;
+          partner_id: string;
+          profit_pct: number;
+          amount: number;
+          paid_at: string | null;
+          journal_entry_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          distribution_id: string;
+          partner_id: string;
+          profit_pct: number;
+          amount: number;
+          paid_at?: string | null;
+          journal_entry_id?: string | null;
+        };
+        Update: Partial<{ paid_at: string | null; journal_entry_id: string | null }>;
+        Relationships: [];
+      };
       online_payments: {
         Row: {
           id: string;

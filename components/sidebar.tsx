@@ -23,6 +23,8 @@ import {
   Sparkles,
   ClipboardCheck,
   Store,
+  Handshake,
+  Landmark,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -56,6 +58,8 @@ const NAV: NavItem[] = [
   { href: "/produccion", label: "Producción", icon: Factory, permission: "produccion" },
   { href: "/remesas", label: "Remesas", icon: Send, permission: "remesas" },
   { href: "/contabilidad", label: "Contabilidad", icon: Calculator, permission: "contabilidad" },
+  { href: "/socios", label: "Socios", icon: Handshake, permission: "socios" },
+  { href: "/capital", label: "Capital", icon: Landmark, permission: "capital" },
   { href: "/asistente", label: "Asistente IA", icon: Sparkles, permission: "asistente" },
   { href: "/usuarios", label: "Usuarios", icon: Users, permission: "usuarios" },
 ];

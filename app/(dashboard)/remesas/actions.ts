@@ -117,13 +117,13 @@ export async function upsertExchangeRateAction(formData: FormData) {
     const day = requireString(formData, "day", "Fecha");
     const rate = Number(formData.get("rate") ?? 0);
     if (!Number.isFinite(rate) || rate <= 0) throw new ValidationError("Tasa inválida.");
-    await upsertExchangeRate({
-      day,
-      currency_from: optionalString(formData, "currency_from") || "USD",
-      currency_to: optionalString(formData, "currency_to") || "CUP",
-      rate,
-      notes: optionalString(formData, "notes"),
-    });
+    const CURRENCIES = ["USD", "EUR", "CUP"];
+    const currency_from = optionalString(formData, "currency_from") || "USD";
+    const currency_to = optionalString(formData, "currency_to") || "CUP";
+    if (!CURRENCIES.includes(currency_from) || !CURRENCIES.includes(currency_to) || currency_from === currency_to) {
+      throw new ValidationError("Moneda inválida.");
+    }
+    await upsertExchangeRate({ day, currency_from, currency_to, rate, notes: optionalString(formData, "notes") });
   } catch (e) { redirect(`/remesas/tasas?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`); }
   redirect(`/remesas/tasas?success=Tasa+guardada`);
 }

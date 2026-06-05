@@ -32,6 +32,8 @@ export const PERMISSIONS = [
   "produccion",
   "remesas",
   "contabilidad",
+  "socios",
+  "capital",
   "usuarios",
   "asistente",
 ] as const;
@@ -86,6 +88,7 @@ export const ROLE_PERMISSIONS: Record<RoleId, Permission[] | typeof ALL> = {
     "nomina",
     "remesas",
     "contabilidad",
+    "capital",
   ],
   rrhh: ["empleados", "asistencia", "nomina"],
   // Roles del negocio "remesas" (modelo por membresía, migración 0022). Todos
@@ -138,6 +141,8 @@ export const PERMISSION_HOME: Record<Permission, string> = {
   produccion: "/produccion",
   remesas: "/remesas",
   contabilidad: "/contabilidad",
+  socios: "/socios",
+  capital: "/capital",
   usuarios: "/usuarios",
   asistente: "/asistente",
 };
