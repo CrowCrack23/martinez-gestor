@@ -30,6 +30,7 @@ export type ProductionStatus = "borrador" | "producida" | "cancelada";
 export type RemittanceStatus = "pendiente" | "entregada" | "cancelada";
 export type RemittancePayoutMethod = "efectivo" | "tarjeta_cup" | "transferencia" | "otro";
 export type RemittanceOrigin = "eeuu" | "europa";
+export type DeliveryCurrency = "CUP" | "USD" | "EUR";
 export type AccountType = "activo" | "pasivo" | "patrimonio" | "ingreso" | "gasto";
 export type JournalEntryStatus = "borrador" | "contabilizada";
 
@@ -632,6 +633,124 @@ export type Database = {
         Update: Partial<{ name: string; amount: number; acquired_at: string; notes: string; journal_entry_id: string | null }>;
         Relationships: [];
       };
+      // ── Tenedores de dinero / deudores (remesas) ──
+      money_holders: {
+        Row: {
+          id: string;
+          business_slug: string;
+          name: string;
+          kind: "mensajero" | "deudor" | "socio" | "caja" | "otro";
+          app_user_id: string | null;
+          location: "alla" | "aca";
+          active: boolean;
+          notes: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_slug: string;
+          name: string;
+          kind?: "mensajero" | "deudor" | "socio" | "caja" | "otro";
+          app_user_id?: string | null;
+          location?: "alla" | "aca";
+          active?: boolean;
+          notes?: string;
+        };
+        Update: Partial<{
+          name: string;
+          kind: "mensajero" | "deudor" | "socio" | "caja" | "otro";
+          app_user_id: string | null;
+          location: "alla" | "aca";
+          active: boolean;
+          notes: string;
+        }>;
+        Relationships: [];
+      };
+      money_movements: {
+        Row: {
+          id: string;
+          business_slug: string;
+          holder_id: string;
+          amount: number;
+          currency: DeliveryCurrency;
+          kind: "entrega" | "cobro" | "ajuste" | "liquidacion" | "deuda";
+          remittance_id: string | null;
+          occurred_at: string;
+          notes: string;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_slug: string;
+          holder_id: string;
+          amount: number;
+          currency?: DeliveryCurrency;
+          kind?: "entrega" | "cobro" | "ajuste" | "liquidacion" | "deuda";
+          remittance_id?: string | null;
+          occurred_at?: string;
+          notes?: string;
+          created_by?: string | null;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      // ── Cuadre semanal de remesas (snapshot confirmado) ──
+      remittance_weekly_closures: {
+        Row: {
+          id: string;
+          business_slug: string;
+          week_start: string;
+          delivered_count: number;
+          commissions_cup: number;
+          spread_cup: number;
+          profit_cup: number;
+          courier_pay_cup: number;
+          net_cup: number;
+          status: "confirmada" | "pagada_parcial" | "pagada";
+          notes: string;
+          closed_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_slug: string;
+          week_start: string;
+          delivered_count?: number;
+          commissions_cup?: number;
+          spread_cup?: number;
+          profit_cup?: number;
+          courier_pay_cup?: number;
+          net_cup?: number;
+          status?: "confirmada" | "pagada_parcial" | "pagada";
+          notes?: string;
+          closed_by?: string | null;
+        };
+        Update: Partial<{ status: "confirmada" | "pagada_parcial" | "pagada" }>;
+        Relationships: [];
+      };
+      remittance_closure_partner_lines: {
+        Row: {
+          id: string;
+          closure_id: string;
+          partner_id: string;
+          profit_pct: number;
+          amount: number;
+          paid_at: string | null;
+          journal_entry_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          closure_id: string;
+          partner_id: string;
+          profit_pct: number;
+          amount: number;
+          paid_at?: string | null;
+          journal_entry_id?: string | null;
+        };
+        Update: Partial<{ paid_at: string | null; journal_entry_id: string | null }>;
+        Relationships: [];
+      };
       // ── Reparto mensual de ganancias (snapshot confirmado) ──
       profit_distributions: {
         Row: {
@@ -933,6 +1052,12 @@ export type Database = {
           assigned_to: string | null;
           gestor_id: string | null;
           gestor_commission_usd: number;
+          delivery_currency: DeliveryCurrency;
+          delivery_amount: number | null;
+          delivery_rate: number | null;
+          delivery_cost_rate: number | null;
+          profit_cup: number | null;
+          courier_fee_cup: number;
           created_by: string | null; paid_by: string | null; paid_at: string | null;
           created_at: string; updated_at: string;
         };
@@ -949,6 +1074,7 @@ export type Database = {
           assigned_to?: string | null;
           gestor_id?: string | null;
           gestor_commission_usd?: number;
+          courier_fee_cup?: number;
           created_by?: string | null;
         };
         Update: {
@@ -964,6 +1090,12 @@ export type Database = {
           assigned_to?: string | null;
           gestor_id?: string | null;
           gestor_commission_usd?: number;
+          delivery_currency?: DeliveryCurrency;
+          delivery_amount?: number | null;
+          delivery_rate?: number | null;
+          delivery_cost_rate?: number | null;
+          profit_cup?: number | null;
+          courier_fee_cup?: number;
           paid_by?: string | null; paid_at?: string | null;
         };
         Relationships: [];

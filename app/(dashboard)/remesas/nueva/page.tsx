@@ -57,13 +57,20 @@ export default async function NuevaRemesaPage({ searchParams }: { searchParams: 
               <div className="space-y-2 mt-3"><Label htmlFor="beneficiary_address">Dirección</Label><Textarea id="beneficiary_address" name="beneficiary_address" rows={2} /></div>
             </div>
             <RemittanceAmounts rates={{ eeuu: usdRate?.rate ?? null, europa: eurRate?.rate ?? null }} />
-            <div className="space-y-2 max-w-xs">
-              <Label htmlFor="assigned_to">Mensajero</Label>
-              <Select id="assigned_to" name="assigned_to" defaultValue="">
-                <option value="">— Sin asignar —</option>
-                {couriers.map((c) => <option key={c.id} value={c.id}>{c.full_name || c.username}</option>)}
-              </Select>
-              <p className="text-xs text-muted-foreground">Quién lleva el dinero al beneficiario. Verá esta remesa en su lista.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="assigned_to">Mensajero</Label>
+                <Select id="assigned_to" name="assigned_to" defaultValue="">
+                  <option value="">— Sin asignar —</option>
+                  {couriers.map((c) => <option key={c.id} value={c.id}>{c.full_name || c.username}</option>)}
+                </Select>
+                <p className="text-xs text-muted-foreground">Quién lleva el dinero al beneficiario. Verá esta remesa en su lista.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="courier_fee_cup">Pago al mensajero (CUP)</Label>
+                <Input id="courier_fee_cup" name="courier_fee_cup" type="number" step="0.01" min="0" placeholder="0" />
+                <p className="text-xs text-muted-foreground">Por esta entrega; se liquida en el cuadre semanal.</p>
+              </div>
             </div>
             <div className="space-y-2"><Label htmlFor="notes">Notas</Label><Textarea id="notes" name="notes" rows={2} /></div>
             <div className="flex gap-2 justify-end pt-2">

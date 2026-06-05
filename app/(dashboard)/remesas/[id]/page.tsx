@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { hasRole, requirePermission, remittanceAssignee } from "@/lib/auth";
-import { getRemittance, REM_STATUS_BADGE, REM_STATUS_LABEL, REM_PAYOUT_LABEL, REM_ORIGIN_LABEL, REM_ORIGIN_CURRENCY } from "@/lib/remittances";
+import { getLatestRate, getRemittance, REM_STATUS_BADGE, REM_STATUS_LABEL, REM_PAYOUT_LABEL, REM_ORIGIN_LABEL, REM_ORIGIN_CURRENCY } from "@/lib/remittances";
 import { listUsersByRole } from "@/lib/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +27,13 @@ function money(amount: number, currency: string) {
 export default async function RemesaDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
   const user = await requirePermission("remesas");
   const { id } = await params;
-  const [r, couriers, sp] = await Promise.all([getRemittance(id), listUsersByRole("mensajero"), searchParams]);
+  const [r, couriers, sp, rateUsd, rateEur] = await Promise.all([
+    getRemittance(id),
+    listUsersByRole("mensajero"),
+    searchParams,
+    getLatestRate("USD", "CUP"),
+    getLatestRate("EUR", "CUP"),
+  ]);
   if (!r) notFound();
   const assignee = remittanceAssignee(user);
   const isCourier = assignee !== undefined;
@@ -71,8 +77,18 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
               <Field label="Pago" value={REM_PAYOUT_LABEL[r.payout_method]} />
               {!isCourier && <Field label="Comisión" value={money(r.commission_usd, cur)} />}
               <Field label="Mensajero" value={courierName} />
+              {!isCourier && r.courier_fee_cup > 0 && <Field label="Pago al mensajero" value={cupFmt.format(r.courier_fee_cup)} />}
               <Field label="Creada" value={formatDateTime(r.created_at)} />
               {r.paid_at && <Field label="Entregada" value={formatDateTime(r.paid_at)} />}
+              {r.status === "entregada" && r.delivery_amount != null && (
+                <Field label="Entregado" value={money(r.delivery_amount, r.delivery_currency)} />
+              )}
+              {!isCourier && r.status === "entregada" && r.profit_cup != null && (
+                <Field
+                  label="Ganancia (comisión + tasa)"
+                  value={`${cupFmt.format(r.profit_cup)} (comisión ${cupFmt.format(r.commission_usd * r.exchange_rate)})`}
+                />
+              )}
             </div>
             {r.beneficiary_address && <Field label="Dirección" value={r.beneficiary_address} />}
             {r.notes && <Field label="Notas" value={r.notes} />}
@@ -107,13 +123,20 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
                 rates={{ eeuu: null, europa: null }}
                 initial={{ origin: r.origin, amount: r.amount_usd, rate: r.exchange_rate, commission: r.commission_usd }}
               />
-              <div className="space-y-2 max-w-xs">
-                <Label htmlFor="assigned_to">Mensajero</Label>
-                <Select id="assigned_to" name="assigned_to" defaultValue={r.assigned_to ?? ""}>
-                  <option value="">— Sin asignar —</option>
-                  {couriers.map((c) => <option key={c.id} value={c.id}>{c.full_name || c.username}</option>)}
-                </Select>
-                <p className="text-xs text-muted-foreground">Quién lleva el dinero al beneficiario.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="assigned_to">Mensajero</Label>
+                  <Select id="assigned_to" name="assigned_to" defaultValue={r.assigned_to ?? ""}>
+                    <option value="">— Sin asignar —</option>
+                    {couriers.map((c) => <option key={c.id} value={c.id}>{c.full_name || c.username}</option>)}
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Quién lleva el dinero al beneficiario.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="courier_fee_cup">Pago al mensajero (CUP)</Label>
+                  <Input id="courier_fee_cup" name="courier_fee_cup" type="number" step="0.01" min="0" defaultValue={r.courier_fee_cup || ""} placeholder="0" />
+                  <p className="text-xs text-muted-foreground">Por esta entrega; se liquida en el cuadre semanal.</p>
+                </div>
               </div>
               <div className="space-y-2"><Label htmlFor="notes">Notas</Label><Textarea id="notes" name="notes" rows={2} defaultValue={r.notes} /></div>
               <div className="flex gap-2 justify-end pt-2">
@@ -128,9 +151,46 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
       {pending && (
         <>
           <Card>
-            <CardContent className="pt-6 flex flex-wrap gap-3 items-center justify-between">
-              <div><div className="font-medium">Marcar entregada</div><div className="text-sm text-muted-foreground">Cuando el beneficiario reciba el dinero.</div></div>
-              <form action={pay}><Button type="submit">Marcar entregada</Button></form>
+            <CardContent className="pt-6 space-y-4">
+              <div>
+                <div className="font-medium">Marcar entregada</div>
+                <div className="text-sm text-muted-foreground">Cuando el beneficiario reciba el dinero.</div>
+              </div>
+              {isCourier ? (
+                <form action={pay}><Button type="submit">Marcar entregada</Button></form>
+              ) : (
+                <form action={pay} className="flex flex-wrap items-end gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="delivery_currency" className="text-xs">Moneda entregada</Label>
+                    <Select id="delivery_currency" name="delivery_currency" defaultValue="CUP">
+                      <option value="CUP">CUP</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="delivery_amount" className="text-xs">Monto entregado</Label>
+                    <Input id="delivery_amount" name="delivery_amount" type="number" step="0.01" min="0.01" defaultValue={r.amount_cup} className="w-36" required />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="delivery_cost_rate" className="text-xs">Tasa de costo →CUP</Label>
+                    <Input
+                      id="delivery_cost_rate"
+                      name="delivery_cost_rate"
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      defaultValue={r.origin === "europa" ? (rateEur?.rate ?? "") : (rateUsd?.rate ?? "")}
+                      className="w-32"
+                    />
+                  </div>
+                  <Button type="submit">Marcar entregada</Button>
+                  <p className="w-full text-xs text-muted-foreground">
+                    Si entrega CUP, la tasa de costo no se usa. Si entrega USD/EUR, la tasa de costo
+                    (cuánto cuesta conseguir esa moneda, en CUP) determina la ganancia por diferencia de tasas.
+                  </p>
+                </form>
+              )}
             </CardContent>
           </Card>
           <Card className="border-destructive/30">

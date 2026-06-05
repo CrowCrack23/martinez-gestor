@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Banknote } from "lucide-react";
+import { Plus, Banknote, Wallet, ClipboardCheck } from "lucide-react";
 import { requirePermission, remittanceAssignee } from "@/lib/auth";
 import { listRemittances, REM_STATUS_BADGE, REM_STATUS_LABEL, REM_PAYOUT_LABEL, REM_ORIGIN_LABEL, REM_ORIGIN_CURRENCY } from "@/lib/remittances";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,9 @@ export default async function RemesasPage({ searchParams }: { searchParams: SP }
           </p>
         </div>
         {!isCourier && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button asChild variant="outline"><Link href="/remesas/dinero"><Wallet className="size-4" />Dinero</Link></Button>
+            <Button asChild variant="outline"><Link href="/remesas/cuadre"><ClipboardCheck className="size-4" />Cuadre semanal</Link></Button>
             <Button asChild variant="outline"><Link href="/remesas/tasas"><Banknote className="size-4" />Tasas</Link></Button>
             <Button asChild><Link href="/remesas/nueva"><Plus className="size-4" />Nueva remesa</Link></Button>
           </div>

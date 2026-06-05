@@ -30,9 +30,11 @@ const ACC = {
   ventasOnline: "4100",
   ventasTienda: "4200",
   comisionesRemesas: "4300",
+  diferenciaTasas: "4310",
   costoVentas: "5100",
   salarios: "5200",
   comisionesVenta: "5250",
+  pagoMensajeros: "5260",
 } as const;
 
 async function accountIdsByCode(codes: string[]): Promise<Map<string, string>> {
@@ -256,38 +258,89 @@ export async function generateCommissionEntry(input: {
 }
 
 /**
- * Remesa entregada: se registra solo la comisión como ingreso (en CUP).
- *   Caja CUP (debe) / Comisiones remesas (haber)
- * El movimiento del principal (USD recibido ↔ CUP pagado) es un pase neto que no
- * afecta el resultado, por eso no se asienta en este modelo simplificado.
+ * Remesa entregada: ganancia = comisión + diferencia de tasas, en el negocio
+ * del origen (remesas_eeuu | remesas_europa, migración 0033).
+ *   Caja CUP (debe, ganancia total) / Comisiones remesas 4300 (haber)
+ *                                   / Diferencia de tasas 4310 (haber, si hay spread)
+ * Un spread negativo (se entregó más caro) va al DEBE de 4310 como pérdida por
+ * tasa, manteniendo el asiento balanceado. El movimiento del principal
+ * (USD/EUR recibido ↔ entregado) es un pase neto que no se asienta.
  */
 export async function generateRemittanceEntry(input: {
   remittanceId: string;
   code: string;
-  commissionUsd: number;
-  exchangeRate: number;
+  origin: "eeuu" | "europa";
+  commissionCup: number;
+  spreadCup: number;
   date: string;
   userId: string | null;
 }): Promise<void> {
   try {
-    const commissionCup = round2(input.commissionUsd * input.exchangeRate);
-    if (commissionCup <= 0) return;
+    const commission = round2(input.commissionCup);
+    const spread = round2(input.spreadCup);
+    const profit = round2(commission + spread);
+    if (profit <= 0 && commission <= 0) return;
     if (await entryExists("remesa", input.remittanceId)) return;
-    const acc = await accountIdsByCode([ACC.cajaCup, ACC.comisionesRemesas]);
+    // Mismo mapeo que remittanceBusiness (lib/remittances.ts); duplicado aquí
+    // para no crear un import circular remittances ↔ auto-accounting.
+    const business = input.origin === "europa" ? "remesas_europa" : "remesas_eeuu";
+    const needed: string[] = [ACC.cajaCup, ACC.comisionesRemesas];
+    if (spread !== 0) needed.push(ACC.diferenciaTasas);
+    const acc = await accountIdsByCode(needed);
     const lines: JournalLineInput[] = [
-      { account_id: acc.get(ACC.cajaCup)!, debit: commissionCup, credit: 0, description: "Comisión cobrada" },
-      { account_id: acc.get(ACC.comisionesRemesas)!, debit: 0, credit: commissionCup, description: `Comisión remesa ${input.code}` },
+      { account_id: acc.get(ACC.cajaCup)!, debit: profit, credit: 0, description: `Ganancia remesa ${input.code}` },
+      { account_id: acc.get(ACC.comisionesRemesas)!, debit: 0, credit: commission, description: `Comisión remesa ${input.code}` },
     ];
+    if (spread > 0) {
+      lines.push({ account_id: acc.get(ACC.diferenciaTasas)!, debit: 0, credit: spread, description: "Diferencia de tasas" });
+    } else if (spread < 0) {
+      lines.push({ account_id: acc.get(ACC.diferenciaTasas)!, debit: -spread, credit: 0, description: "Pérdida por tasa" });
+    }
     await createJournalEntry({
       entry_date: input.date,
-      description: `Comisión remesa ${input.code}`,
+      description: `Remesa ${input.code} entregada`,
       reference_type: "remesa",
       reference_id: input.remittanceId,
-      business: "remesas",
+      business,
       created_by: input.userId,
       lines,
     });
   } catch (e) {
     console.error("[auto-accounting] generateRemittanceEntry falló:", e);
+  }
+}
+
+/**
+ * Cuadre semanal de remesas confirmado: pago agregado a los mensajeros de la
+ * semana (Σ courier_fee_cup de las remesas entregadas).
+ *   Pago a mensajeros 5260 (debe) / Caja CUP (haber)
+ */
+export async function generateCourierPayEntry(input: {
+  closureId: string;
+  business: string;
+  weekStart: string;
+  amountCup: number;
+  userId: string | null;
+}): Promise<void> {
+  try {
+    const amount = round2(input.amountCup);
+    if (amount <= 0) return;
+    if (await entryExists("cuadre_remesas", input.closureId)) return;
+    const acc = await accountIdsByCode([ACC.pagoMensajeros, ACC.cajaCup]);
+    const lines: JournalLineInput[] = [
+      { account_id: acc.get(ACC.pagoMensajeros)!, debit: amount, credit: 0, description: "Pago a mensajeros de la semana" },
+      { account_id: acc.get(ACC.cajaCup)!, debit: 0, credit: amount, description: "Pago de mensajería" },
+    ];
+    await createJournalEntry({
+      entry_date: input.weekStart,
+      description: `Pago mensajeros semana ${input.weekStart}`,
+      reference_type: "cuadre_remesas",
+      reference_id: input.closureId,
+      business: input.business,
+      created_by: input.userId,
+      lines,
+    });
+  } catch (e) {
+    console.error("[auto-accounting] generateCourierPayEntry falló:", e);
   }
 }

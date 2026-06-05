@@ -43,7 +43,17 @@ function parseFields(form: FormData) {
     payout_method: parseMethod(form.get("payout_method")),
     notes: optionalString(form, "notes"),
     assigned_to: optionalString(form, "assigned_to") || null,
+    courier_fee_cup: parseCourierFee(form),
   };
+}
+
+/** Pago al mensajero por la entrega (CUP). Manual por remesa; 0 si no aplica. */
+function parseCourierFee(form: FormData): number {
+  const raw = form.get("courier_fee_cup");
+  if (raw == null || String(raw).trim() === "") return 0;
+  const fee = Number(raw);
+  if (!Number.isFinite(fee) || fee < 0) throw new ValidationError("Pago al mensajero inválido.");
+  return fee;
 }
 
 export async function createRemittanceAction(formData: FormData) {
@@ -80,11 +90,33 @@ async function assertCanOperate(id: string, user: Awaited<ReturnType<typeof requ
   }
 }
 
-export async function payRemittanceAction(id: string) {
+const DELIVERY_CURRENCIES = ["CUP", "USD", "EUR"] as const;
+
+export async function payRemittanceAction(id: string, formData?: FormData) {
   const user = await requireRole(["admin", "vendedor", "mensajero"]);
   await assertCanOperate(id, user);
-  try { await payRemittance(id, user.id); }
-  catch (e) {
+  try {
+    // Datos de entrega (opcionales): moneda, monto, tasa al cliente y tasa de
+    // costo. Sin ellos se asume entrega en CUP a la tasa registrada.
+    let delivery: Parameters<typeof payRemittance>[2];
+    const cur = String(formData?.get("delivery_currency") ?? "");
+    if (cur) {
+      if (!DELIVERY_CURRENCIES.includes(cur as (typeof DELIVERY_CURRENCIES)[number])) {
+        throw new ValidationError("Moneda de entrega inválida.");
+      }
+      const amount = Number(formData?.get("delivery_amount") ?? 0);
+      if (!Number.isFinite(amount) || amount <= 0) throw new ValidationError("Monto entregado inválido.");
+      const rateRaw = formData?.get("delivery_rate");
+      const costRaw = formData?.get("delivery_cost_rate");
+      delivery = {
+        currency: cur as (typeof DELIVERY_CURRENCIES)[number],
+        amount,
+        rate: rateRaw && String(rateRaw).trim() !== "" ? Number(rateRaw) : null,
+        cost_rate: costRaw && String(costRaw).trim() !== "" ? Number(costRaw) : null,
+      };
+    }
+    await payRemittance(id, user.id, delivery);
+  } catch (e) {
     if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
     redirect(`/remesas/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
   }

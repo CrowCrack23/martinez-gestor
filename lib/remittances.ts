@@ -2,7 +2,7 @@ import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { generateRemittanceEntry } from "./auto-accounting";
-import type { Database, RemittanceStatus, RemittancePayoutMethod, RemittanceOrigin } from "./supabase-types";
+import type { Database, RemittanceStatus, RemittancePayoutMethod, RemittanceOrigin, DeliveryCurrency } from "./supabase-types";
 
 const TAG = "remittances";
 const TAG_RATES = "exchange_rates";
@@ -58,6 +58,7 @@ export async function createRemittance(input: {
   payout_method: RemittancePayoutMethod;
   notes: string;
   assigned_to?: string | null;
+  courier_fee_cup?: number;
   created_by: string | null;
 }): Promise<string> {
   const sb = getSupabase();
@@ -74,26 +75,110 @@ export async function updateRemittance(id: string, patch: Database["public"]["Ta
   bust();
 }
 
-export async function payRemittance(id: string, userId: string): Promise<void> {
+export type RemittanceDelivery = {
+  currency: DeliveryCurrency;
+  /** Monto entregado al beneficiario, en `currency`. */
+  amount: number;
+  /** Tasa usada con el cliente (origen → moneda de entrega). Informativa. */
+  rate?: number | null;
+  /** Tasa de COSTO de la moneda entregada → CUP (lo que cuesta conseguirla). */
+  cost_rate?: number | null;
+};
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Marca la remesa como entregada y congela su ganancia:
+ *   comisión_cup = commission_usd × exchange_rate
+ *   costo_cup    = lo que costó entregar (delivery_amount × cost_rate; en CUP directo si entrega CUP)
+ *   spread_cup   = amount_cup − costo_cup   (diferencia de tasas)
+ *   profit_cup   = comisión_cup + spread_cup
+ * Sin datos de entrega (APK/flujo legado) se asume entrega en CUP por
+ * amount_cup → spread 0 y profit = comisión (comportamiento anterior).
+ */
+export async function payRemittance(id: string, userId: string, delivery?: RemittanceDelivery): Promise<void> {
   const sb = getSupabase();
   const r = await getRemittance(id);
   if (!r) throw new Error("Remesa no encontrada.");
   if (r.status !== "pendiente") throw new Error(`No se puede marcar como entregada una remesa en estado ${r.status}.`);
+
+  const commissionCup = round2(r.commission_usd * r.exchange_rate);
+  let costCup = r.amount_cup; // entrega CUP a la misma tasa → spread 0
+  let deliveryPatch: Database["public"]["Tables"]["remittance_operations"]["Update"] = {
+    delivery_currency: "CUP",
+    delivery_amount: r.amount_cup,
+  };
+  if (delivery) {
+    if (!Number.isFinite(delivery.amount) || delivery.amount <= 0) throw new Error("Monto entregado inválido.");
+    if (delivery.currency === "CUP") {
+      costCup = delivery.amount;
+    } else {
+      if (!delivery.cost_rate || delivery.cost_rate <= 0) {
+        throw new Error(`Falta la tasa de costo ${delivery.currency}→CUP para calcular la ganancia.`);
+      }
+      costCup = delivery.amount * delivery.cost_rate;
+    }
+    deliveryPatch = {
+      delivery_currency: delivery.currency,
+      delivery_amount: delivery.amount,
+      delivery_rate: delivery.rate ?? null,
+      delivery_cost_rate: delivery.cost_rate ?? null,
+    };
+  }
+  const spreadCup = round2(r.amount_cup - costCup);
+  const profitCup = round2(commissionCup + spreadCup);
+
   const { error } = await sb.from("remittance_operations").update({
     status: "entregada", paid_by: userId, paid_at: new Date().toISOString(),
+    ...deliveryPatch,
+    profit_cup: profitCup,
   }).eq("id", id);
   if (error) throw error;
 
-  // Asiento contable automático (borrador): Caja CUP / Comisiones remesas (en CUP).
+  // Asiento contable automático (borrador), en el negocio del origen.
   await generateRemittanceEntry({
     remittanceId: r.id,
     code: r.code,
-    commissionUsd: r.commission_usd,
-    exchangeRate: r.exchange_rate,
+    origin: r.origin,
+    commissionCup,
+    spreadCup,
     date: new Date().toISOString().slice(0, 10),
     userId,
   });
+
+  // Si entregó un mensajero con tenedor de dinero vinculado, registrar que él
+  // cobró/retuvo ese efectivo hasta rendir cuentas (best-effort).
+  try {
+    if (r.assigned_to) {
+      const { data: holder } = await sb
+        .from("money_holders")
+        .select("id")
+        .eq("business_slug", remittanceBusiness(r.origin))
+        .eq("app_user_id", r.assigned_to)
+        .eq("active", true)
+        .limit(1)
+        .maybeSingle();
+      if (holder) {
+        const cur = (deliveryPatch.delivery_currency ?? "CUP") as DeliveryCurrency;
+        await sb.from("money_movements").insert({
+          business_slug: remittanceBusiness(r.origin),
+          holder_id: holder.id,
+          amount: -(deliveryPatch.delivery_amount ?? r.amount_cup), // el mensajero ENTREGÓ ese dinero
+          currency: cur,
+          kind: "entrega",
+          remittance_id: r.id,
+          notes: `Entrega remesa ${r.code}`,
+          created_by: userId,
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[remittances] movimiento de mensajero falló:", e);
+  }
   bust();
+  revalidateTag("money_holders", "max");
 }
 
 export async function cancelRemittance(id: string): Promise<void> {
@@ -189,3 +274,17 @@ export const REM_ORIGIN_CURRENCY: Record<RemittanceOrigin, string> = {
 export function remittanceCurrency(origin: RemittanceOrigin): string {
   return REM_ORIGIN_CURRENCY[origin];
 }
+
+// ── Negocio contable ────────────────────────────────────────────────────────
+// Las remesas son DOS negocios separados (EE.UU. sin socios, Europa con un
+// socio 50/50). El módulo operativo y la RLS siguen bajo el slug 'remesas';
+// la contabilidad se separa derivando el negocio del origen (migración 0033).
+
+export function remittanceBusiness(origin: RemittanceOrigin): "remesas_eeuu" | "remesas_europa" {
+  return origin === "europa" ? "remesas_europa" : "remesas_eeuu";
+}
+
+export const REM_BUSINESS_LABEL: Record<"remesas_eeuu" | "remesas_europa", string> = {
+  remesas_eeuu: "Remesas EE.UU.",
+  remesas_europa: "Remesas Europa",
+};
