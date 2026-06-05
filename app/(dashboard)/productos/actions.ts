@@ -22,11 +22,15 @@ function parsePrice(form: FormData, key: string, label: string, required: boolea
 
 function parseInput(form: FormData): ProductInput {
   const price = parsePrice(form, "price", "Precio", true)!;
+  const priceCup = parsePrice(form, "price_cup", "Precio CUP", false);
+  const priceEur = parsePrice(form, "price_eur", "Precio EUR", false);
   const oldPrice = parsePrice(form, "old_price", "Precio anterior", false);
   return {
     name: requireString(form, "name", "Nombre"),
     description: optionalString(form, "description"),
     price,
+    price_cup: priceCup,
+    price_eur: priceEur,
     old_price: oldPrice,
     image: optionalString(form, "image"),
     category: requireString(form, "category", "Categoría"),

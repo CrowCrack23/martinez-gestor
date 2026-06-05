@@ -529,6 +529,22 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      // ── Precios de producto por moneda (ventas del gestor) ──
+      product_prices: {
+        Row: {
+          product_id: string;
+          currency: DeliveryCurrency;
+          price: number;
+          updated_at: string;
+        };
+        Insert: {
+          product_id: string;
+          currency: DeliveryCurrency;
+          price: number;
+        };
+        Update: Partial<{ price: number }>;
+        Relationships: [];
+      };
       // ── Socios por negocio (no son usuarios del sistema) ──
       business_partners: {
         Row: {

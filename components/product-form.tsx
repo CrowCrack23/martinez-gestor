@@ -13,6 +13,8 @@ export type ProductFormInitial = {
   name: string;
   description: string;
   price: number;
+  price_cup: number | null;
+  price_eur: number | null;
   old_price: number | null;
   image: string;
   category: string;
@@ -46,10 +48,21 @@ export function ProductForm({
         <Input id="name" name="name" required defaultValue={initial?.name ?? ""} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="space-y-2">
           <Label htmlFor="price">Precio (USD) *</Label>
           <Input id="price" name="price" type="number" step="0.01" min="0" required defaultValue={initial?.price ?? ""} />
+          <p className="text-xs text-muted-foreground">Tienda online y ventas en USD.</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="price_cup">Precio (CUP)</Label>
+          <Input id="price_cup" name="price_cup" type="number" step="0.01" min="0" defaultValue={initial?.price_cup ?? ""} />
+          <p className="text-xs text-muted-foreground">Ventas en moneda nacional.</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="price_eur">Precio (EUR)</Label>
+          <Input id="price_eur" name="price_eur" type="number" step="0.01" min="0" defaultValue={initial?.price_eur ?? ""} />
+          <p className="text-xs text-muted-foreground">Si se vende en euros.</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="old_price">Precio anterior (opcional)</Label>

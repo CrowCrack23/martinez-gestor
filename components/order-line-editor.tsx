@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { formatPrice } from "@/lib/format";
 
-export type LineProduct = { id: string; name: string; store: string; price: number };
+export type LineProduct = { id: string; name: string; store: string; price: number; price_cup?: number | null };
 export type InitialLine = { product_id: string; quantity: number; unit_price: number };
 
 type Row = { uid: number; product_id: string; quantity: string; unit_price: string };
@@ -25,7 +25,9 @@ export function OrderLineEditor({
         }))
       : [{ uid: 1, product_id: "", quantity: "1", unit_price: "0" }];
   const [rows, setRows] = useState<Row[]>(seed);
-  const priceMap = useMemo(() => new Map(products.map((p) => [p.id, p.price])), [products]);
+  // Precio sugerido: el de CUP si existe (las ventas del gestor son en CUP);
+  // si no, cae al precio USD del catálogo online.
+  const priceMap = useMemo(() => new Map(products.map((p) => [p.id, p.price_cup ?? p.price])), [products]);
 
   const total = useMemo(
     () => rows.reduce((s, r) => {
@@ -65,7 +67,9 @@ export function OrderLineEditor({
               <Select name="product_id" required value={r.product_id} onChange={(e) => onProductChange(r.uid, e.target.value)}>
                 <option value="">— Producto —</option>
                 {products.map((p) => (
-                  <option key={p.id} value={p.id}>[{p.store}] {p.name} — {formatPrice(p.price)}</option>
+                  <option key={p.id} value={p.id}>
+                    [{p.store}] {p.name} — {p.price_cup != null ? `${formatPrice(p.price_cup)} CUP` : `${formatPrice(p.price)} USD`}
+                  </option>
                 ))}
               </Select>
               <Input

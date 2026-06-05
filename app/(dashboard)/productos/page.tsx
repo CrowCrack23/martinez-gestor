@@ -56,13 +56,14 @@ export default async function ProductosPage({ searchParams }: { searchParams: SP
               <th className="px-4 py-3 font-medium">Producto</th>
               <th className="px-4 py-3 font-medium">Tienda</th>
               <th className="px-4 py-3 font-medium">Categoría</th>
-              <th className="px-4 py-3 font-medium text-right">Precio</th>
+              <th className="px-4 py-3 font-medium text-right">Precio USD</th>
+              <th className="px-4 py-3 font-medium text-right">Precio CUP</th>
               <th className="px-4 py-3 font-medium text-center">Online</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Sin productos.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Sin productos.</td></tr>
             )}
             {rows.map((p) => (
               <tr key={p.id} className="border-b last:border-b-0 hover:bg-muted/30">
@@ -76,6 +77,9 @@ export default async function ProductosPage({ searchParams }: { searchParams: SP
                 <td className="px-4 py-3 text-muted-foreground">{storeLabel(p.store)}</td>
                 <td className="px-4 py-3 text-muted-foreground">{p.category}</td>
                 <td className="px-4 py-3 text-right font-mono">{formatPrice(p.price)}</td>
+                <td className="px-4 py-3 text-right font-mono">
+                  {p.price_cup != null ? formatPrice(p.price_cup) : <span className="text-muted-foreground text-xs">—</span>}
+                </td>
                 <td className="px-4 py-3 text-center">
                   {p.online_visible
                     ? <Check className="size-4 text-success inline" />
