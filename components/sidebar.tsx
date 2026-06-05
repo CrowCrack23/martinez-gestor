@@ -21,6 +21,8 @@ import {
   Send,
   Calculator,
   Sparkles,
+  ClipboardCheck,
+  Store,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -44,6 +46,8 @@ const NAV: NavItem[] = [
   { href: "/proveedores", label: "Proveedores", icon: Truck, permission: "proveedores" },
   { href: "/compras", label: "Compras", icon: ShoppingCart, permission: "compras" },
   { href: "/ventas", label: "Ventas", icon: Receipt, permission: "ventas" },
+  { href: "/cuadres", label: "Cuadres", icon: ClipboardCheck, permission: "cuadres" },
+  { href: "/puntos-venta", label: "Puntos de venta", icon: Store, permission: "puntos_venta" },
   { href: "/clientes", label: "Clientes", icon: UserRound, permission: "clientes" },
   { href: "/empleados", label: "Empleados", icon: Briefcase, permission: "empleados" },
   { href: "/asistencia", label: "Asistencia", icon: CalendarCheck, permission: "asistencia" },

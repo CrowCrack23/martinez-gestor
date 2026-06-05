@@ -10,7 +10,8 @@ export type WarehouseType =
   | "almacen_central"
   | "tienda_fisica"
   | "tienda_online"
-  | "centro_elaboracion";
+  | "centro_elaboracion"
+  | "punto_venta";
 
 export type InventoryMovementType =
   | "entrada"
@@ -23,6 +24,7 @@ export type PurchaseOrderStatus = "borrador" | "recibida" | "cancelada";
 export type OrderOrigin = "online" | "pos" | "whatsapp" | "otro";
 export type OrderStatus = "borrador" | "confirmada" | "cancelada";
 export type PaymentMethod = "efectivo" | "transferencia" | "tarjeta" | "mixto" | "otro";
+export type OrderCurrency = "CUP" | "USD";
 export type PayrollStatus = "borrador" | "cerrada";
 export type ProductionStatus = "borrador" | "producida" | "cancelada";
 export type RemittanceStatus = "pendiente" | "entregada" | "cancelada";
@@ -407,6 +409,10 @@ export type Database = {
           payment_ref: string | null;
           amount_charged: number | null;
           charge_currency: string | null;
+          currency: OrderCurrency;
+          amount_usd: number | null;
+          sale_rate: number | null;
+          cogs_total: number;
           created_at: string;
           updated_at: string;
         };
@@ -426,6 +432,9 @@ export type Database = {
           payment_ref?: string | null;
           amount_charged?: number | null;
           charge_currency?: string | null;
+          currency?: OrderCurrency;
+          amount_usd?: number | null;
+          sale_rate?: number | null;
         };
         Update: {
           customer_id?: string | null;
@@ -443,7 +452,80 @@ export type Database = {
           payment_ref?: string | null;
           amount_charged?: number | null;
           charge_currency?: string | null;
+          currency?: OrderCurrency;
+          amount_usd?: number | null;
+          sale_rate?: number | null;
+          cogs_total?: number;
         };
+        Relationships: [];
+      };
+      // ── Punto de venta: trabajador fijo + % sobre la ganancia de su punto ──
+      point_of_sale_staff: {
+        Row: {
+          warehouse_id: string;
+          user_id: string;
+          commission_pct: number;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          warehouse_id: string;
+          user_id: string;
+          commission_pct?: number;
+          active?: boolean;
+        };
+        Update: Partial<{
+          user_id: string;
+          commission_pct: number;
+          active: boolean;
+        }>;
+        Relationships: [];
+      };
+      // ── Cuadre diario por punto de venta (snapshot confirmado) ──
+      daily_closures: {
+        Row: {
+          id: string;
+          warehouse_id: string;
+          business_slug: string;
+          day: string;
+          revenue_cup: number;
+          cogs_cup: number;
+          cogs_usd: number;
+          profit_cup: number;
+          commission_pct: number;
+          commission_cup: number;
+          net_cup: number;
+          cash_cup: number;
+          transfer_cup: number;
+          usd_total: number;
+          order_count: number;
+          rate_used: number | null;
+          notes: string;
+          closed_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          warehouse_id: string;
+          business_slug: string;
+          day: string;
+          revenue_cup?: number;
+          cogs_cup?: number;
+          cogs_usd?: number;
+          profit_cup?: number;
+          commission_pct?: number;
+          commission_cup?: number;
+          net_cup?: number;
+          cash_cup?: number;
+          transfer_cup?: number;
+          usd_total?: number;
+          order_count?: number;
+          rate_used?: number | null;
+          notes?: string;
+          closed_by?: string | null;
+        };
+        Update: never;
         Relationships: [];
       };
       online_payments: {

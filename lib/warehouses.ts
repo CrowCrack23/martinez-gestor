@@ -85,4 +85,5 @@ export const WAREHOUSE_TYPE_LABEL: Record<WarehouseType, string> = {
   tienda_fisica: "Tienda física",
   tienda_online: "Tienda online",
   centro_elaboracion: "Centro de elaboración",
+  punto_venta: "Punto de venta",
 };

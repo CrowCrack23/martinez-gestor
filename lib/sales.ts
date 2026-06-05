@@ -2,8 +2,10 @@ import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { createMovement } from "./inventory";
+import { movementCost } from "./costing";
 import { generateSaleEntry } from "./auto-accounting";
-import type { OrderOrigin, OrderStatus, PaymentMethod } from "./supabase-types";
+import { getLatestRate } from "./remittances";
+import type { OrderCurrency, OrderOrigin, OrderStatus, PaymentMethod } from "./supabase-types";
 
 const TAG = "sales";
 function bust() {
@@ -23,6 +25,8 @@ export type OrderSummary = {
   warehouse_id: string;
   warehouse_name: string;
   payment_method: PaymentMethod;
+  currency: OrderCurrency;
+  amount_usd: number | null;
   reference: string;
   total_amount: number;
   payment_status: string;
@@ -39,6 +43,8 @@ type OrderRawRow = {
   customer_id: string | null;
   warehouse_id: string;
   payment_method: PaymentMethod;
+  currency: OrderCurrency;
+  amount_usd: number | null;
   reference: string;
   total_amount: number;
   payment_status: string;
@@ -55,7 +61,7 @@ export const listOrders = unstable_cache(
     let q = sb
       .from("orders")
       .select(
-        "id,code,status,origin,customer_id,warehouse_id,payment_method,reference,total_amount,payment_status,created_at,confirmed_at,customers(name),warehouses!inner(name,store_slug),order_lines(id)",
+        "id,code,status,origin,customer_id,warehouse_id,payment_method,currency,amount_usd,reference,total_amount,payment_status,created_at,confirmed_at,customers(name),warehouses!inner(name,store_slug),order_lines(id)",
       )
       .order("created_at", { ascending: false });
     if (filter?.status) q = q.eq("status", filter.status);
@@ -75,6 +81,8 @@ export const listOrders = unstable_cache(
       warehouse_id: r.warehouse_id,
       warehouse_name: r.warehouses?.name ?? "",
       payment_method: r.payment_method,
+      currency: r.currency ?? "CUP",
+      amount_usd: r.amount_usd != null ? Number(r.amount_usd) : null,
       reference: r.reference,
       total_amount: Number(r.total_amount),
       payment_status: r.payment_status ?? "no_aplica",
@@ -108,6 +116,10 @@ export type OrderDetail = {
   warehouse_name: string;
   warehouse_store: string | null;
   payment_method: PaymentMethod;
+  currency: OrderCurrency;
+  amount_usd: number | null;
+  sale_rate: number | null;
+  cogs_total: number;
   reference: string;
   notes: string;
   total_amount: number;
@@ -125,7 +137,7 @@ export async function getOrder(id: string, scope?: string[]): Promise<OrderDetai
   const { data, error } = await sb
     .from("orders")
     .select(
-      "id,code,status,origin,customer_id,warehouse_id,payment_method,reference,notes,total_amount,payment_status,amount_charged,charge_currency,created_at,confirmed_at,movement_id,customers(name),warehouses!inner(name,store_slug)",
+      "id,code,status,origin,customer_id,warehouse_id,payment_method,currency,amount_usd,sale_rate,cogs_total,reference,notes,total_amount,payment_status,amount_charged,charge_currency,created_at,confirmed_at,movement_id,customers(name),warehouses!inner(name,store_slug)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -134,6 +146,7 @@ export async function getOrder(id: string, scope?: string[]): Promise<OrderDetai
   const d = data as unknown as {
     id: string; code: string; status: OrderStatus; origin: OrderOrigin;
     customer_id: string | null; warehouse_id: string; payment_method: PaymentMethod;
+    currency: OrderCurrency; amount_usd: number | null; sale_rate: number | null; cogs_total: number;
     reference: string; notes: string; total_amount: number;
     payment_status: string; amount_charged: number | null; charge_currency: string | null;
     created_at: string; confirmed_at: string | null; movement_id: string | null;
@@ -175,6 +188,10 @@ export async function getOrder(id: string, scope?: string[]): Promise<OrderDetai
     warehouse_name: d.warehouses?.name ?? "",
     warehouse_store: d.warehouses?.store_slug ?? null,
     payment_method: d.payment_method,
+    currency: d.currency ?? "CUP",
+    amount_usd: d.amount_usd != null ? Number(d.amount_usd) : null,
+    sale_rate: d.sale_rate != null ? Number(d.sale_rate) : null,
+    cogs_total: Number(d.cogs_total ?? 0),
     reference: d.reference,
     notes: d.notes,
     total_amount: Number(d.total_amount),
@@ -193,6 +210,7 @@ export async function createOrder(input: {
   warehouse_id: string;
   origin: OrderOrigin;
   payment_method: PaymentMethod;
+  currency?: OrderCurrency;
   reference: string;
   notes: string;
   created_by: string | null;
@@ -207,6 +225,7 @@ export async function createOrder(input: {
       warehouse_id: input.warehouse_id,
       origin: input.origin,
       payment_method: input.payment_method,
+      currency: input.currency ?? "CUP",
       reference: input.reference,
       notes: input.notes,
       created_by: input.created_by,
@@ -238,6 +257,7 @@ export async function updateOrderHeader(
     warehouse_id?: string;
     origin?: OrderOrigin;
     payment_method?: PaymentMethod;
+    currency?: OrderCurrency;
     reference?: string;
     notes?: string;
   },
@@ -284,6 +304,20 @@ export async function confirmOrder(id: string, userId: string): Promise<void> {
     lines: o.lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity })),
   });
 
+  // COGS congelado al confirmar (lo usan comisiones por ganancia y cuadres).
+  const cogs = await movementCost(movementId);
+
+  // Venta cobrada en USD: snapshot de la tasa del día y monto en dólares.
+  // total_amount sigue en CUP (lo recalcula el trigger desde las líneas).
+  let saleRate: number | null = null;
+  let amountUsd: number | null = null;
+  if (o.currency === "USD") {
+    const rate = await getLatestRate("USD", "CUP");
+    if (!rate) throw new Error("No hay tasa USD→CUP registrada; registra la tasa del día antes de vender en USD.");
+    saleRate = rate.rate;
+    amountUsd = Math.round((o.total_amount / rate.rate) * 100) / 100;
+  }
+
   const { error } = await sb
     .from("orders")
     .update({
@@ -291,6 +325,8 @@ export async function confirmOrder(id: string, userId: string): Promise<void> {
       confirmed_by: userId,
       confirmed_at: new Date().toISOString(),
       movement_id: movementId,
+      cogs_total: cogs,
+      ...(saleRate != null ? { sale_rate: saleRate, amount_usd: amountUsd } : {}),
     })
     .eq("id", id);
   if (error) throw error;
@@ -356,4 +392,9 @@ export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   tarjeta: "Tarjeta",
   mixto: "Mixto",
   otro: "Otro",
+};
+
+export const ORDER_CURRENCY_LABEL: Record<OrderCurrency, string> = {
+  CUP: "CUP",
+  USD: "USD",
 };

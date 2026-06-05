@@ -32,6 +32,7 @@ const ACC = {
   comisionesRemesas: "4300",
   costoVentas: "5100",
   salarios: "5200",
+  comisionesVenta: "5250",
 } as const;
 
 async function accountIdsByCode(codes: string[]): Promise<Map<string, string>> {
@@ -215,6 +216,42 @@ export async function generatePayrollEntry(input: {
     }
   } catch (e) {
     console.error("[auto-accounting] generatePayrollEntry falló:", e);
+  }
+}
+
+/**
+ * Cuadre diario confirmado: comisión del trabajador del punto de venta
+ * (% sobre la ganancia del día, ver lib/closures.ts).
+ *   Comisiones de venta (debe) / Caja CUP (haber)
+ */
+export async function generateCommissionEntry(input: {
+  closureId: string;
+  warehouseName: string;
+  day: string;
+  commissionCup: number;
+  business: string | null;
+  userId: string | null;
+}): Promise<void> {
+  try {
+    const commission = round2(input.commissionCup);
+    if (commission <= 0) return;
+    if (await entryExists("cuadre", input.closureId)) return;
+    const acc = await accountIdsByCode([ACC.comisionesVenta, ACC.cajaCup]);
+    const lines: JournalLineInput[] = [
+      { account_id: acc.get(ACC.comisionesVenta)!, debit: commission, credit: 0, description: "Comisión del vendedor" },
+      { account_id: acc.get(ACC.cajaCup)!, debit: 0, credit: commission, description: "Pago de comisión" },
+    ];
+    await createJournalEntry({
+      entry_date: input.day,
+      description: `Comisión cuadre ${input.day} — ${input.warehouseName}`,
+      reference_type: "cuadre",
+      reference_id: input.closureId,
+      business: input.business,
+      created_by: input.userId,
+      lines,
+    });
+  } catch (e) {
+    console.error("[auto-accounting] generateCommissionEntry falló:", e);
   }
 }
 

@@ -5,7 +5,13 @@ import { createWarehouse, deleteWarehouse, updateWarehouse } from "@/lib/warehou
 import type { WarehouseType } from "@/lib/supabase-types";
 import { optionalString, requireString, ValidationError } from "@/lib/validation";
 
-const TYPES: WarehouseType[] = ["almacen_central", "tienda_fisica", "tienda_online", "centro_elaboracion"];
+const TYPES: WarehouseType[] = [
+  "almacen_central",
+  "tienda_fisica",
+  "tienda_online",
+  "centro_elaboracion",
+  "punto_venta",
+];
 
 function parseType(form: FormData): WarehouseType {
   const v = String(form.get("type") ?? "");

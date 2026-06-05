@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission, businessScope } from "@/lib/auth";
 import {
-  getOrder, ORDER_STATUS_BADGE, ORDER_STATUS_LABEL, ORDER_ORIGIN_LABEL, PAYMENT_METHOD_LABEL,
+  getOrder, ORDER_CURRENCY_LABEL, ORDER_STATUS_BADGE, ORDER_STATUS_LABEL, ORDER_ORIGIN_LABEL, PAYMENT_METHOD_LABEL,
 } from "@/lib/sales";
 import { listCustomers } from "@/lib/customers";
 import { listWarehouses } from "@/lib/warehouses";
@@ -46,7 +46,19 @@ export default async function VentaDetallePage({ params, searchParams }: { param
               <div><div className="text-muted-foreground text-xs">Cliente</div><div>{o.customer_name ?? "Consumidor final"}</div></div>
               <div><div className="text-muted-foreground text-xs">Almacén origen</div><div>{o.warehouse_name}</div></div>
               <div><div className="text-muted-foreground text-xs">Origen</div><div>{ORDER_ORIGIN_LABEL[o.origin]}</div></div>
-              <div><div className="text-muted-foreground text-xs">Pago</div><div>{PAYMENT_METHOD_LABEL[o.payment_method]}</div></div>
+              <div><div className="text-muted-foreground text-xs">Pago</div><div>{PAYMENT_METHOD_LABEL[o.payment_method]} ({o.currency})</div></div>
+              {o.currency === "USD" && o.amount_usd != null && (
+                <div>
+                  <div className="text-muted-foreground text-xs">Cobrado en USD</div>
+                  <div className="font-mono">USD {o.amount_usd.toFixed(2)}{o.sale_rate != null ? ` (tasa ${o.sale_rate})` : ""}</div>
+                </div>
+              )}
+              {o.status === "confirmada" && o.cogs_total > 0 && (
+                <div>
+                  <div className="text-muted-foreground text-xs">Costo (FIFO)</div>
+                  <div className="font-mono">{formatPrice(o.cogs_total)}</div>
+                </div>
+              )}
               {o.amount_charged != null && (
                 <div>
                   <div className="text-muted-foreground text-xs">Cobrado online</div>
@@ -128,7 +140,7 @@ export default async function VentaDetallePage({ params, searchParams }: { param
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="origin">Origen</Label>
                 <Select id="origin" name="origin" defaultValue={o.origin}>
@@ -139,6 +151,12 @@ export default async function VentaDetallePage({ params, searchParams }: { param
                 <Label htmlFor="payment_method">Pago</Label>
                 <Select id="payment_method" name="payment_method" defaultValue={o.payment_method}>
                   {Object.entries(PAYMENT_METHOD_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="currency">Moneda</Label>
+                <Select id="currency" name="currency" defaultValue={o.currency}>
+                  {Object.entries(ORDER_CURRENCY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </Select>
               </div>
               <div className="space-y-2">

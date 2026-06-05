@@ -4,7 +4,7 @@ import { listCustomers } from "@/lib/customers";
 import { listWarehouses } from "@/lib/warehouses";
 import { listProductsLite } from "@/lib/products-lite";
 import {
-  ORDER_ORIGIN_LABEL, PAYMENT_METHOD_LABEL,
+  ORDER_CURRENCY_LABEL, ORDER_ORIGIN_LABEL, PAYMENT_METHOD_LABEL,
 } from "@/lib/sales";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,7 +58,7 @@ export default async function NuevaVentaPage({ searchParams }: { searchParams: S
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="origin">Origen</Label>
                 <Select id="origin" name="origin" defaultValue="pos">
@@ -70,6 +70,13 @@ export default async function NuevaVentaPage({ searchParams }: { searchParams: S
                 <Select id="payment_method" name="payment_method" defaultValue="efectivo">
                   {Object.entries(PAYMENT_METHOD_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="currency">Moneda</Label>
+                <Select id="currency" name="currency" defaultValue="CUP">
+                  {Object.entries(ORDER_CURRENCY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </Select>
+                <p className="text-xs text-muted-foreground">USD: al confirmar se aplica la tasa del día.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="reference">Ref. externa</Label>

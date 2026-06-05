@@ -5,11 +5,12 @@ import {
   cancelOrder, confirmOrder, createOrder, deleteOrder,
   replaceOrderLines, updateOrderHeader, type OrderLineInput,
 } from "@/lib/sales";
-import type { OrderOrigin, PaymentMethod } from "@/lib/supabase-types";
+import type { OrderCurrency, OrderOrigin, PaymentMethod } from "@/lib/supabase-types";
 import { optionalString, requireString, ValidationError } from "@/lib/validation";
 
 const ORIGINS: OrderOrigin[] = ["online", "pos", "whatsapp", "otro"];
 const METHODS: PaymentMethod[] = ["efectivo", "transferencia", "tarjeta", "mixto", "otro"];
+const CURRENCIES: OrderCurrency[] = ["CUP", "USD"];
 
 function parseOrigin(v: FormDataEntryValue | null): OrderOrigin {
   const s = String(v ?? "pos");
@@ -20,6 +21,11 @@ function parseMethod(v: FormDataEntryValue | null): PaymentMethod {
   const s = String(v ?? "efectivo");
   if (!METHODS.includes(s as PaymentMethod)) throw new ValidationError("Método de pago inválido.");
   return s as PaymentMethod;
+}
+function parseCurrency(v: FormDataEntryValue | null): OrderCurrency {
+  const s = String(v ?? "CUP");
+  if (!CURRENCIES.includes(s as OrderCurrency)) throw new ValidationError("Moneda inválida.");
+  return s as OrderCurrency;
 }
 
 function parseLines(form: FormData): OrderLineInput[] {
@@ -50,6 +56,7 @@ export async function createOrderAction(formData: FormData) {
       warehouse_id: requireString(formData, "warehouse_id", "Almacén"),
       origin: parseOrigin(formData.get("origin")),
       payment_method: parseMethod(formData.get("payment_method")),
+      currency: parseCurrency(formData.get("currency")),
       reference: optionalString(formData, "reference"),
       notes: optionalString(formData, "notes"),
       created_by: user.id,
@@ -70,6 +77,7 @@ export async function updateOrderAction(id: string, formData: FormData) {
       warehouse_id: requireString(formData, "warehouse_id", "Almacén"),
       origin: parseOrigin(formData.get("origin")),
       payment_method: parseMethod(formData.get("payment_method")),
+      currency: parseCurrency(formData.get("currency")),
       reference: optionalString(formData, "reference"),
       notes: optionalString(formData, "notes"),
     });
