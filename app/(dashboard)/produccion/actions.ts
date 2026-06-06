@@ -40,7 +40,8 @@ export async function cancelProductionOrderAction(id: string) {
 }
 
 export async function deleteProductionOrderAction(id: string) {
-  await requireRole(["admin", "almacenero"]);
+  // Borrar es exclusivo del dueño (requisito del cliente).
+  await requireRole(["admin"]);
   try { await deleteProductionOrder(id); }
   catch (e) { redirect(`/produccion/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`); }
   redirect(`/produccion?success=Orden+eliminada`);

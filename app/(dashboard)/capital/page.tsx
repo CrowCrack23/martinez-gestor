@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePermission } from "@/lib/auth";
 import { listBusinessesLite } from "@/lib/businesses";
 import { capitalSnapshot, listFixedAssets } from "@/lib/capital";
@@ -7,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Flash } from "@/components/flash";
-import { addFixedAssetAction } from "./actions";
+import { cupToUsd, formatUsd } from "@/lib/currency";
+import { addFixedAssetAction, recordCashMovementAction } from "./actions";
 
 type SP = Promise<{ business?: string; error?: string; success?: string }>;
 
@@ -22,6 +24,7 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
   const [snapshot, assets] = await Promise.all([capitalSnapshot(business), listFixedAssets(business)]);
   const today = new Date().toISOString().slice(0, 10);
   const isAdmin = user.roles.includes("admin");
+  const canRecord = isAdmin || user.roles.includes("contador");
 
   return (
     <div className="space-y-6">
@@ -46,8 +49,24 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
         <Button type="submit" variant="outline" size="sm">Ver</Button>
       </form>
 
-      {/* Totales */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      {snapshot.usdRate == null && (
+        <div className="rounded-md border border-warning/30 bg-warning/10 text-sm px-3 py-2">
+          No hay tasa USD→CUP registrada: la caja USD no entra en los totales y no se muestran
+          equivalentes en dólares. Registra una tasa en <span className="font-mono">/remesas/tasas</span>.
+        </div>
+      )}
+
+      {/* Totales (el dólar es la moneda rectora) */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-sm text-muted-foreground">Capital total (USD)</div>
+            <div className="text-2xl font-semibold">{formatUsd(cupToUsd(snapshot.capitalTotal, snapshot.usdRate))}</div>
+            {snapshot.usdRate != null && (
+              <div className="text-xs text-muted-foreground">Tasa {snapshot.usdRate} CUP/USD</div>
+            )}
+          </CardContent>
+        </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Capital total</div>
@@ -58,7 +77,9 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Dinero en movimiento</div>
             <div className="text-2xl font-semibold">{fmt(snapshot.moving)} CUP</div>
-            <div className="text-xs text-muted-foreground">Efectivo + inventario + CxC − CxP</div>
+            <div className="text-xs text-muted-foreground">
+              Efectivo + inventario + CxC − CxP · ≈ {formatUsd(cupToUsd(snapshot.moving, snapshot.usdRate))}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -70,6 +91,21 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
         </Card>
       </div>
 
+      {/* Capital aportado por socios */}
+      <Card>
+        <CardContent className="pt-6 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm text-muted-foreground">Capital aportado por socios</div>
+            <div className="text-xl font-semibold">{fmt(snapshot.contributed.total)} CUP</div>
+            <div className="text-xs text-muted-foreground">
+              Aportes: {fmt(snapshot.contributed.cup)} CUP + {fmt(snapshot.contributed.usd)} USD
+              {" "}· ≈ {formatUsd(cupToUsd(snapshot.contributed.total, snapshot.usdRate))}
+            </div>
+          </div>
+          <Button asChild variant="outline" size="sm"><Link href="/socios/aportes">Ver aportes</Link></Button>
+        </CardContent>
+      </Card>
+
       {/* Desglose dinero en movimiento */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -78,7 +114,10 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
             <div className="text-xl font-semibold">{fmt(snapshot.cash.total)} CUP</div>
             <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
               <div>Caja CUP: {fmt(snapshot.cash.cup)}</div>
-              <div>Caja USD (en CUP): {fmt(snapshot.cash.usd)}</div>
+              <div>
+                Caja USD: {fmt(snapshot.cash.usd)} USD
+                {snapshot.cash.usdCup != null ? ` (≈ ${fmt(snapshot.cash.usdCup)} CUP)` : " (sin tasa)"}
+              </div>
               <div>Banco: {fmt(snapshot.cash.bank)}</div>
             </div>
           </CardContent>
@@ -129,6 +168,50 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
               </tbody>
             </table>
           </div>
+        </Card>
+      )}
+
+      {/* Ingresos y gastos manuales */}
+      {canRecord && (
+        <Card>
+          <CardContent className="pt-6 space-y-4">
+            <div>
+              <div className="font-medium">Registrar ingreso o gasto</div>
+              <div className="text-sm text-muted-foreground">
+                Entra o sale dinero de la caja del negocio y se refleja automáticamente en el capital y la contabilidad.
+              </div>
+            </div>
+            <form action={recordCashMovementAction} className="flex flex-wrap items-end gap-3">
+              <input type="hidden" name="business_slug" value={business} />
+              <div className="space-y-1">
+                <Label htmlFor="kind" className="text-xs">Tipo</Label>
+                <Select id="kind" name="kind" defaultValue="ingreso" className="w-32">
+                  <option value="ingreso">Ingreso</option>
+                  <option value="gasto">Gasto</option>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="mov_amount" className="text-xs">Monto</Label>
+                <Input id="mov_amount" name="amount" type="number" step="0.01" min="0.01" className="w-32" required />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="mov_currency" className="text-xs">Moneda</Label>
+                <Select id="mov_currency" name="currency" defaultValue="CUP" className="w-24">
+                  <option value="CUP">CUP</option>
+                  <option value="USD">USD</option>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="concept" className="text-xs">Concepto</Label>
+                <Input id="concept" name="concept" placeholder="Ej: alquiler, venta informal" required />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="mov_date" className="text-xs">Fecha</Label>
+                <Input id="mov_date" name="date" type="date" defaultValue={today} required />
+              </div>
+              <Button type="submit" size="sm">Registrar</Button>
+            </form>
+          </CardContent>
         </Card>
       )}
 

@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { InventoryMovementType } from "@/lib/supabase-types";
 
 type Warehouse = { id: string; name: string };
-type Product = { id: string; name: string; store: string };
+type Product = { id: string; name: string; store: string | null };
 
 type Line = { id: number; product_id: string; quantity: string };
 
@@ -90,7 +90,7 @@ export function MovementForm({
                   <option value="">— Producto —</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      [{p.store}] {p.name}
+                      [{p.store ?? "almacén"}] {p.name}
                     </option>
                   ))}
                 </Select>

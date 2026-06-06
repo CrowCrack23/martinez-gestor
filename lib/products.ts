@@ -24,8 +24,10 @@ export type ProductRow = {
   price_eur: number | null;
   old_price: number | null;
   image: string;
-  category: string;
-  store: string;
+  // store/category null = producto "solo almacén" (no pertenece a ninguna
+  // tienda; nunca se muestra en la tienda online).
+  category: string | null;
+  store: string | null;
   shipping_time: string | null;
   featured: boolean;
   is_new: boolean;
@@ -49,7 +51,8 @@ export const listCatalog = unstable_cache(
       .select("id,name,description,price,old_price,image,category,store,shipping_time,featured,is_new,online_visible,product_prices(currency,price)")
       .order("name");
     if (filter?.store) q = q.eq("store", filter.store);
-    if (filter?.scope) q = q.in("store", filter.scope);
+    // Los productos sin tienda (solo almacén) son visibles para cualquier scope.
+    if (filter?.scope) q = q.or(`store.in.(${filter.scope.join(",")}),store.is.null`);
     const { data, error } = await q;
     if (error) throw error;
     type R = Omit<ProductRow, "price_cup" | "price_eur"> & { product_prices: PriceRow[] | null };
@@ -93,8 +96,9 @@ export type ProductInput = {
   price_eur: number | null;
   old_price: number | null;
   image: string;
-  category: string;
-  store: string;
+  /** null = sin tienda (solo almacén); fuerza online_visible = false. */
+  category: string | null;
+  store: string | null;
   shipping_time: string | null;
   featured: boolean;
   is_new: boolean;
@@ -141,7 +145,8 @@ export async function createCatalogProduct(input: ProductInput): Promise<string>
     shipping_time: input.shipping_time,
     featured: input.featured,
     is_new: input.is_new,
-    online_visible: input.online_visible,
+    // Un producto sin tienda nunca se muestra en la tienda online.
+    online_visible: input.store == null ? false : input.online_visible,
   });
   if (error) throw error;
   await syncProductPrices(id, input);
@@ -164,7 +169,8 @@ export async function updateCatalogProduct(id: string, input: ProductInput): Pro
       shipping_time: input.shipping_time,
       featured: input.featured,
       is_new: input.is_new,
-      online_visible: input.online_visible,
+      // Un producto sin tienda nunca se muestra en la tienda online.
+      online_visible: input.store == null ? false : input.online_visible,
     })
     .eq("id", id);
   if (error) throw error;

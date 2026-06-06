@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requirePermission, businessScope } from "@/lib/auth";
+import { hasRole, requirePermission, businessScope } from "@/lib/auth";
 import { getPurchaseOrder, STATUS_BADGE, STATUS_LABEL } from "@/lib/purchases";
 import { listSuppliers } from "@/lib/suppliers";
 import { listWarehouses } from "@/lib/warehouses";
@@ -32,6 +32,7 @@ export default async function CompraDetallePage({ params, searchParams }: { para
   if (!po) notFound();
 
   const editable = po.status === "borrador";
+  const canDelete = hasRole(user, ["admin"]);
   const update = updatePurchaseOrderAction.bind(null, po.id);
   const receive = receivePurchaseOrderAction.bind(null, po.id);
   const cancel = cancelPurchaseOrderAction.bind(null, po.id);
@@ -169,12 +170,14 @@ export default async function CompraDetallePage({ params, searchParams }: { para
       <Card className="border-destructive/30">
         <CardContent className="pt-6 flex flex-wrap gap-3 items-center justify-between">
           <div>
-            <div className="font-medium">Cancelar / eliminar</div>
-            <div className="text-sm text-muted-foreground">Cancelar la deja en historial; eliminar la borra por completo.</div>
+            <div className="font-medium">{canDelete ? "Cancelar / eliminar" : "Cancelar"}</div>
+            <div className="text-sm text-muted-foreground">
+              {canDelete ? "Cancelar la deja en historial; eliminar la borra por completo." : "Cancelar la deja en historial."}
+            </div>
           </div>
           <div className="flex gap-2">
             <form action={cancel}><Button type="submit" variant="outline">Cancelar</Button></form>
-            <form action={remove}><Button type="submit" variant="destructive">Eliminar</Button></form>
+            {canDelete && <form action={remove}><Button type="submit" variant="destructive">Eliminar</Button></form>}
           </div>
         </CardContent>
       </Card>

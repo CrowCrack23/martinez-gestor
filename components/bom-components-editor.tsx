@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
-export type LineProduct = { id: string; name: string; store: string };
+export type LineProduct = { id: string; name: string; store: string | null };
 export type InitialComp = { component_product_id: string; quantity_per_unit: number };
 type Row = { uid: number; component_product_id: string; quantity_per_unit: string };
 
@@ -32,7 +32,7 @@ export function BomComponentsEditor({
             <Select name="component_product_id" required value={r.component_product_id}
               onChange={(e) => setRows((cur) => cur.map((x) => x.uid === r.uid ? { ...x, component_product_id: e.target.value } : x))}>
               <option value="">— Producto —</option>
-              {products.map((p) => <option key={p.id} value={p.id}>[{p.store}] {p.name}</option>)}
+              {products.map((p) => <option key={p.id} value={p.id}>[{p.store ?? "almacén"}] {p.name}</option>)}
             </Select>
             <Input type="number" step="0.0001" min={0.0001} name="quantity_per_unit" required
               value={r.quantity_per_unit}

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BusinessFilter } from "@/components/business-filter";
 import { formatPrice } from "@/lib/format";
+import { getRate, cupToUsd, formatUsd } from "@/lib/currency";
 import type { TrialBalanceRow } from "@/lib/accounting";
 
 type SP = Promise<{ from?: string; to?: string; posted?: string; business?: string }>;
@@ -18,7 +19,10 @@ export default async function ResultadosPage({ searchParams }: { searchParams: S
   const scope = businessScope(user);
   const business = sp.business && (!scope || scope.includes(sp.business)) ? sp.business : undefined;
   const businesses = (await listBusinessesLite()).filter((b) => !scope || scope.includes(b.slug));
-  const pl = await incomeStatement({ from: sp.from, to: sp.to, postedOnly, scope, business });
+  const [pl, usdRate] = await Promise.all([
+    incomeStatement({ from: sp.from, to: sp.to, postedOnly, scope, business }),
+    getRate("USD"),
+  ]);
 
   const selected = business ? businesses.find((b) => b.slug === business)?.label : null;
 
@@ -55,14 +59,17 @@ export default async function ResultadosPage({ searchParams }: { searchParams: S
         </CardContent>
       </Card>
 
-      <Section title="Ingresos" rows={pl.income} total={pl.totalIncome} />
-      <Section title="Gastos" rows={pl.expense} total={pl.totalExpense} />
+      <Section title="Ingresos" rows={pl.income} total={pl.totalIncome} usdRate={usdRate} />
+      <Section title="Gastos" rows={pl.expense} total={pl.totalExpense} usdRate={usdRate} />
 
       <Card>
         <CardContent className="pt-6 flex items-center justify-between">
           <div className="font-medium">Utilidad neta</div>
-          <div className={`text-lg font-mono font-semibold ${pl.netIncome < 0 ? "text-destructive" : "text-success"}`}>
-            {formatPrice(pl.netIncome)}
+          <div className="text-right">
+            <div className={`text-lg font-mono font-semibold ${pl.netIncome < 0 ? "text-destructive" : "text-success"}`}>
+              {formatPrice(pl.netIncome)}
+            </div>
+            <div className="text-xs text-muted-foreground">≈ {formatUsd(cupToUsd(pl.netIncome, usdRate))}</div>
           </div>
         </CardContent>
       </Card>
@@ -70,7 +77,7 @@ export default async function ResultadosPage({ searchParams }: { searchParams: S
   );
 }
 
-function Section({ title, rows, total }: { title: string; rows: TrialBalanceRow[]; total: number }) {
+function Section({ title, rows, total, usdRate }: { title: string; rows: TrialBalanceRow[]; total: number; usdRate: number | null }) {
   return (
     <Card>
       <div className="overflow-x-auto">
@@ -94,7 +101,7 @@ function Section({ title, rows, total }: { title: string; rows: TrialBalanceRow[
             ))}
             {rows.length > 0 && (
               <tr className="font-medium border-t">
-                <td colSpan={2} className="px-4 py-2">Total {title}</td>
+                <td colSpan={2} className="px-4 py-2">Total {title} <span className="text-xs text-muted-foreground font-normal">≈ {formatUsd(cupToUsd(total, usdRate))}</span></td>
                 <td className="px-4 py-2 text-right font-mono">{formatPrice(total)}</td>
               </tr>
             )}

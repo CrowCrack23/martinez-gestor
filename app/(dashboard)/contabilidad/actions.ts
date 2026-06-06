@@ -115,7 +115,8 @@ export async function postJournalEntryAction(id: string) {
 }
 
 export async function deleteJournalEntryAction(id: string) {
-  await requireRole(["admin", "contador"]);
+  // Borrar es exclusivo del dueño (requisito del cliente).
+  await requireRole(["admin"]);
   try { await deleteJournalEntry(id); }
   catch (e) { redirect(`/contabilidad/asientos/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`); }
   redirect(`/contabilidad/asientos?success=Asiento+eliminado`);

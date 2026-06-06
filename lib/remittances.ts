@@ -191,14 +191,45 @@ export async function cancelRemittance(id: string): Promise<void> {
   bust();
 }
 
+/**
+ * Borra una remesa en cualquier estado (decisión del dueño; el action exige
+ * admin). Si está entregada, borra también su asiento contable — incluso
+ * contabilizado: se baja a borrador primero para liberar el guard de
+ * inmutabilidad de journal_lines — y sus movimientos de dinero asociados.
+ */
 export async function deleteRemittance(id: string): Promise<void> {
   const sb = getSupabase();
   const r = await getRemittance(id);
   if (!r) return;
-  if (r.status === "entregada") throw new Error("No se puede eliminar una remesa entregada.");
+
+  // Movimientos de dinero generados al entregar (FK on delete set null:
+  // quedarían huérfanos y seguirían sumando en los saldos de tenedores).
+  const { error: mmErr } = await sb.from("money_movements").delete().eq("remittance_id", id);
+  if (mmErr) throw mmErr;
+
+  // Asiento contable de la remesa (idempotente por reference_type/reference_id).
+  const { data: je, error: jeErr } = await sb
+    .from("journal_entries")
+    .select("id, status")
+    .eq("reference_type", "remesa")
+    .eq("reference_id", id)
+    .maybeSingle();
+  if (jeErr) throw jeErr;
+  if (je) {
+    if (je.status === "contabilizada") {
+      const { error } = await sb.from("journal_entries").update({ status: "borrador" }).eq("id", je.id);
+      if (error) throw error;
+    }
+    const { error } = await sb.from("journal_entries").delete().eq("id", je.id);
+    if (error) throw error;
+  }
+
   const { error } = await sb.from("remittance_operations").delete().eq("id", id);
   if (error) throw error;
   bust();
+  revalidateTag("money_holders", "max");
+  revalidateTag("accounting", "max");
+  revalidateTag("capital", "max");
 }
 
 // ── Exchange rates ────────────────────────────────────────────────────────

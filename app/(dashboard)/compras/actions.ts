@@ -12,8 +12,19 @@ import {
 } from "@/lib/purchases";
 import { optionalString, requireString, ValidationError } from "@/lib/validation";
 
+function parseOptionalPrice(raw: string, label: string, line: number): number | null {
+  if (raw.trim() === "") return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) throw new ValidationError(`${label} inválido en línea ${line}.`);
+  return Math.round(n * 100) / 100;
+}
+
 function parseLines(form: FormData): PurchaseLineInput[] {
+  const modes = form.getAll("line_mode").map(String);
   const productIds = form.getAll("product_id").map(String);
+  const newNames = form.getAll("new_name").map(String);
+  const newPricesCup = form.getAll("new_price_cup").map(String);
+  const newPricesUsd = form.getAll("new_price_usd").map(String);
   const quantities = form.getAll("quantity").map((v) => Number(v));
   const costs = form.getAll("unit_cost").map((v) => Number(v));
   if (productIds.length === 0) throw new ValidationError("Agrega al menos una línea.");
@@ -22,17 +33,34 @@ function parseLines(form: FormData): PurchaseLineInput[] {
   }
   const lines: PurchaseLineInput[] = [];
   for (let i = 0; i < productIds.length; i++) {
+    // line_mode/new_* solo existen en el editor nuevo; formularios viejos no los envían.
+    const isNew = modes[i] === "nuevo";
     const pid = productIds[i];
+    const name = (newNames[i] ?? "").trim();
     const qty = quantities[i];
     const cost = costs[i];
-    if (!pid) continue;
+    if (!isNew && !pid) continue;
+    if (isNew && !name) throw new ValidationError(`Escribe el nombre del producto nuevo en línea ${i + 1}.`);
     if (!Number.isInteger(qty) || qty <= 0) {
       throw new ValidationError(`Cantidad inválida en línea ${i + 1} (debe ser un entero > 0).`);
     }
     if (!Number.isFinite(cost) || cost < 0) {
       throw new ValidationError(`Costo inválido en línea ${i + 1}.`);
     }
-    lines.push({ product_id: pid, quantity: qty, unit_cost: cost });
+    lines.push({
+      product_id: isNew ? "" : pid,
+      quantity: qty,
+      unit_cost: cost,
+      ...(isNew
+        ? {
+            new_product: {
+              name,
+              price_cup: parseOptionalPrice(newPricesCup[i] ?? "", "Precio CUP", i + 1),
+              price_usd: parseOptionalPrice(newPricesUsd[i] ?? "", "Precio USD", i + 1),
+            },
+          }
+        : null),
+    });
   }
   if (lines.length === 0) throw new ValidationError("Agrega al menos una línea válida.");
   return lines;
@@ -98,7 +126,8 @@ export async function cancelPurchaseOrderAction(id: string) {
 }
 
 export async function deletePurchaseOrderAction(id: string) {
-  await requireRole(["admin", "almacenero"]);
+  // Borrar es exclusivo del dueño (requisito del cliente).
+  await requireRole(["admin"]);
   try {
     await deletePurchaseOrder(id);
   } catch (e) {

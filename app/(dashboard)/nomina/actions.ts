@@ -49,7 +49,8 @@ export async function closePayrollRunAction(id: string) {
 }
 
 export async function deletePayrollRunAction(id: string) {
-  await requireRole(["admin", "rrhh"]);
+  // Borrar es exclusivo del dueño (requisito del cliente).
+  await requireRole(["admin"]);
   try { await deletePayrollRun(id); }
   catch (e) { redirect(`/nomina/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`); }
   redirect(`/nomina?success=Per%C3%ADodo+eliminado`);

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { formatPrice } from "@/lib/format";
 
-export type LineProduct = { id: string; name: string; store: string; price: number; price_cup?: number | null };
+export type LineProduct = { id: string; name: string; store: string | null; price: number; price_cup?: number | null };
 export type InitialLine = { product_id: string; quantity: number; unit_price: number };
 
 type Row = { uid: number; product_id: string; quantity: string; unit_price: string };
@@ -68,7 +68,7 @@ export function OrderLineEditor({
                 <option value="">— Producto —</option>
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
-                    [{p.store}] {p.name} — {p.price_cup != null ? `${formatPrice(p.price_cup)} CUP` : `${formatPrice(p.price)} USD`}
+                    [{p.store ?? "almacén"}] {p.name} — {p.price_cup != null ? `${formatPrice(p.price_cup)} CUP` : `${formatPrice(p.price)} USD`}
                   </option>
                 ))}
               </Select>

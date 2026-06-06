@@ -41,7 +41,9 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
   if (isCourier && r.assigned_to !== assignee) notFound();
   const pending = r.status === "pendiente";
   const editable = pending && !isCourier;        // el mensajero no edita los datos
-  const canDelete = hasRole(user, ["admin"]) && r.status !== "entregada";
+  // El dueño puede borrar en cualquier estado (incluye entregadas: se borra
+  // también su asiento contable y movimientos de dinero).
+  const canDelete = hasRole(user, ["admin"]);
   const cur = REM_ORIGIN_CURRENCY[r.origin];
   const courierName = r.assigned_to ? (couriers.find((c) => c.id === r.assigned_to)?.full_name || couriers.find((c) => c.id === r.assigned_to)?.username || "—") : "—";
 
@@ -203,6 +205,23 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
             </CardContent>
           </Card>
         </>
+      )}
+
+      {/* Borrado disponible en cualquier estado, solo admin. */}
+      {!pending && canDelete && (
+        <Card className="border-destructive/30">
+          <CardContent className="pt-6 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="font-medium">Eliminar remesa</div>
+              <div className="text-sm text-muted-foreground">
+                {r.status === "entregada"
+                  ? "Borra la remesa, su asiento contable y sus movimientos de dinero. No se puede deshacer."
+                  : "Borra la remesa por completo. No se puede deshacer."}
+              </div>
+            </div>
+            <form action={remove}><Button type="submit" variant="destructive">Eliminar</Button></form>
+          </CardContent>
+        </Card>
       )}
       <div><Button asChild variant="ghost"><Link href="/remesas">← Volver</Link></Button></div>
     </div>

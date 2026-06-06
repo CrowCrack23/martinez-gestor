@@ -17,8 +17,8 @@ export type ProductFormInitial = {
   price_eur: number | null;
   old_price: number | null;
   image: string;
-  category: string;
-  store: string;
+  category: string | null;
+  store: string | null;
   shipping_time: string | null;
   featured: boolean;
   is_new: boolean;
@@ -38,7 +38,9 @@ export function ProductForm({
   initial?: ProductFormInitial;
   submitLabel: string;
 }) {
-  const [store, setStore] = useState(initial?.store ?? stores[0]?.slug ?? "");
+  // "" = sin tienda (solo almacén): no se vende online y la categoría es opcional.
+  const [store, setStore] = useState(initial ? (initial.store ?? "") : (stores[0]?.slug ?? ""));
+  const hasStore = store !== "";
   const cats = categories.filter((c) => c.store === store);
 
   return (
@@ -72,18 +74,22 @@ export function ProductForm({
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
-          <Label htmlFor="store">Tienda *</Label>
-          <Select id="store" name="store" required value={store} onChange={(e) => setStore(e.target.value)}>
+          <Label htmlFor="store">Tienda</Label>
+          <Select id="store" name="store" value={store} onChange={(e) => setStore(e.target.value)}>
+            <option value="">— Sin tienda (solo almacén) —</option>
             {stores.map((s) => <option key={s.slug} value={s.slug}>{s.label}</option>)}
           </Select>
+          {!hasStore && (
+            <p className="text-xs text-muted-foreground">El producto vive en el almacén (compras/inventario) y no se vende online.</p>
+          )}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="category">Categoría *</Label>
-          <Select id="category" name="category" required defaultValue={initial?.category ?? ""} key={store}>
+          <Label htmlFor="category">Categoría{hasStore ? " *" : ""}</Label>
+          <Select id="category" name="category" required={hasStore} disabled={!hasStore} defaultValue={initial?.category ?? ""} key={store}>
             <option value="">— Selecciona —</option>
             {cats.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
           </Select>
-          {cats.length === 0 && (
+          {hasStore && cats.length === 0 && (
             <p className="text-xs text-muted-foreground">Esta tienda no tiene categorías. Créalas en el admin de la tienda.</p>
           )}
         </div>
@@ -106,9 +112,9 @@ export function ProductForm({
       </div>
 
       <div className="flex flex-wrap gap-5 pt-1">
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="online_visible" value="1" defaultChecked={initial ? initial.online_visible : true} className="size-4" />
-          Se vende online
+        <label className={`flex items-center gap-2 text-sm ${!hasStore ? "opacity-50" : ""}`}>
+          <input type="checkbox" name="online_visible" value="1" disabled={!hasStore} defaultChecked={initial ? initial.online_visible : true} className="size-4" />
+          Se vende online{!hasStore ? " (requiere tienda)" : ""}
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="featured" value="1" defaultChecked={initial?.featured ?? false} className="size-4" />

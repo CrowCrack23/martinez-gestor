@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requirePermission, businessScope } from "@/lib/auth";
+import { hasRole, requirePermission, businessScope } from "@/lib/auth";
 import {
   getOrder, ORDER_CURRENCY_LABEL, ORDER_STATUS_BADGE, ORDER_STATUS_LABEL, ORDER_ORIGIN_LABEL, PAYMENT_METHOD_LABEL,
 } from "@/lib/sales";
@@ -30,6 +30,7 @@ export default async function VentaDetallePage({ params, searchParams }: { param
   const [o, sp] = await Promise.all([getOrder(id, scope), searchParams]);
   if (!o) notFound();
   const editable = o.status === "borrador";
+  const canDelete = hasRole(user, ["admin"]);
   const update = updateOrderAction.bind(null, o.id);
   const confirm = confirmOrderAction.bind(null, o.id);
   const cancel = cancelOrderAction.bind(null, o.id);
@@ -191,12 +192,14 @@ export default async function VentaDetallePage({ params, searchParams }: { param
       <Card className="border-destructive/30">
         <CardContent className="pt-6 flex flex-wrap gap-3 items-center justify-between">
           <div>
-            <div className="font-medium">Cancelar / eliminar</div>
-            <div className="text-sm text-muted-foreground">Cancelar deja en historial; eliminar borra por completo.</div>
+            <div className="font-medium">{canDelete ? "Cancelar / eliminar" : "Cancelar"}</div>
+            <div className="text-sm text-muted-foreground">
+              {canDelete ? "Cancelar deja en historial; eliminar borra por completo." : "Cancelar deja en historial."}
+            </div>
           </div>
           <div className="flex gap-2">
             <form action={cancel}><Button type="submit" variant="outline">Cancelar</Button></form>
-            <form action={remove}><Button type="submit" variant="destructive">Eliminar</Button></form>
+            {canDelete && <form action={remove}><Button type="submit" variant="destructive">Eliminar</Button></form>}
           </div>
         </CardContent>
       </Card>

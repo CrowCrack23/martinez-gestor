@@ -77,8 +77,9 @@ export type Database = {
           old_price: number | null;
           image: string;
           stock: number;
-          category: string;
-          store: string;
+          // null = producto sin tienda (solo almacén); ver migración 0038.
+          category: string | null;
+          store: string | null;
           shipping_time: string | null;
           featured: boolean;
           is_new: boolean;
@@ -94,8 +95,8 @@ export type Database = {
           old_price?: number | null;
           image?: string;
           stock?: number;
-          category: string;
-          store: string;
+          category: string | null;
+          store: string | null;
           shipping_time?: string | null;
           featured?: boolean;
           is_new?: boolean;
@@ -108,8 +109,8 @@ export type Database = {
           old_price?: number | null;
           image?: string;
           stock?: number;
-          category?: string;
-          store?: string;
+          category?: string | null;
+          store?: string | null;
           shipping_time?: string | null;
           featured?: boolean;
           is_new?: boolean;
@@ -999,11 +1000,13 @@ export type Database = {
       accounts: {
         Row: {
           id: string; code: string; name: string; type: AccountType;
+          currency: DeliveryCurrency;
           parent_id: string | null; active: boolean;
           created_at: string; updated_at: string;
         };
         Insert: {
           id?: string; code: string; name: string; type: AccountType;
+          currency?: DeliveryCurrency;
           parent_id?: string | null; active?: boolean;
         };
         Update: Partial<Database["public"]["Tables"]["accounts"]["Insert"]>;

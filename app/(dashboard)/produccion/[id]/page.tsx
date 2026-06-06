@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requirePermission } from "@/lib/auth";
+import { hasRole, requirePermission } from "@/lib/auth";
 import { getBom, getProductionOrder, PRODUCTION_STATUS_BADGE, PRODUCTION_STATUS_LABEL } from "@/lib/production";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,7 +12,8 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ success?: string; error?: string }>;
 
 export default async function ProduccionDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  await requirePermission("produccion");
+  const user = await requirePermission("produccion");
+  const canDelete = hasRole(user, ["admin"]);
   const { id } = await params;
   const [po, sp] = await Promise.all([getProductionOrder(id), searchParams]);
   if (!po) notFound();
@@ -95,7 +96,7 @@ export default async function ProduccionDetallePage({ params, searchParams }: { 
               <div><div className="font-medium">Cancelar / eliminar</div><div className="text-sm text-muted-foreground">Cancelar deja en historial.</div></div>
               <div className="flex gap-2">
                 <form action={cancel}><Button type="submit" variant="outline">Cancelar</Button></form>
-                <form action={remove}><Button type="submit" variant="destructive">Eliminar</Button></form>
+                {canDelete && <form action={remove}><Button type="submit" variant="destructive">Eliminar</Button></form>}
               </div>
             </CardContent>
           </Card>

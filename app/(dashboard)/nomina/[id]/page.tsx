@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requirePermission } from "@/lib/auth";
+import { hasRole, requirePermission } from "@/lib/auth";
 import { getPayrollRun, PAYROLL_STATUS_LABEL } from "@/lib/hr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,8 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ success?: string; error?: string }>;
 
 export default async function NominaDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  await requirePermission("nomina");
+  const user = await requirePermission("nomina");
+  const canDelete = hasRole(user, ["admin"]);
   const { id } = await params;
   const [data, sp] = await Promise.all([getPayrollRun(id), searchParams]);
   if (!data) notFound();
@@ -113,7 +114,7 @@ export default async function NominaDetallePage({ params, searchParams }: { para
         </Card>
       )}
 
-      {editable && (
+      {editable && canDelete && (
         <Card className="border-destructive/30">
           <CardContent className="pt-6 flex items-center justify-between">
             <div><div className="font-medium">Eliminar período</div><div className="text-sm text-muted-foreground">Borra el borrador y todas sus líneas.</div></div>

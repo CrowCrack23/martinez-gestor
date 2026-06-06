@@ -25,6 +25,10 @@ function parseInput(form: FormData): ProductInput {
   const priceCup = parsePrice(form, "price_cup", "Precio CUP", false);
   const priceEur = parsePrice(form, "price_eur", "Precio EUR", false);
   const oldPrice = parsePrice(form, "old_price", "Precio anterior", false);
+  // Tienda opcional: sin tienda = producto "solo almacén" (no se vende online).
+  const store = optionalString(form, "store") || null;
+  const category = optionalString(form, "category") || null;
+  if (store != null && category == null) throw new ValidationError("Categoría es obligatoria cuando el producto pertenece a una tienda.");
   return {
     name: requireString(form, "name", "Nombre"),
     description: optionalString(form, "description"),
@@ -33,12 +37,12 @@ function parseInput(form: FormData): ProductInput {
     price_eur: priceEur,
     old_price: oldPrice,
     image: optionalString(form, "image"),
-    category: requireString(form, "category", "Categoría"),
-    store: requireString(form, "store", "Tienda"),
+    category,
+    store,
     shipping_time: optionalString(form, "shipping_time") || null,
     featured: form.get("featured") === "1",
     is_new: form.get("is_new") === "1",
-    online_visible: form.get("online_visible") === "1",
+    online_visible: store != null && form.get("online_visible") === "1",
   };
 }
 
@@ -68,7 +72,8 @@ export async function updateProductAction(id: string, formData: FormData) {
 }
 
 export async function deleteProductAction(id: string) {
-  await requireRole(["admin", "almacenero"]);
+  // Borrar es exclusivo del dueño (requisito del cliente).
+  await requireRole(["admin"]);
   try {
     await deleteCatalogProduct(id);
   } catch (e) {

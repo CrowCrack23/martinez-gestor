@@ -18,7 +18,8 @@ export default async function ProductosPage({ searchParams }: { searchParams: SP
     listCatalog({ store: sp.store || undefined, scope }),
     listStoresLite(),
   ]);
-  const storeLabel = (slug: string) => stores.find((s) => s.slug === slug)?.label ?? slug;
+  const storeLabel = (slug: string | null) =>
+    slug == null ? "— (solo almacén)" : (stores.find((s) => s.slug === slug)?.label ?? slug);
 
   return (
     <div className="space-y-6">
@@ -75,7 +76,7 @@ export default async function ProductosPage({ searchParams }: { searchParams: SP
                   </div>
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{storeLabel(p.store)}</td>
-                <td className="px-4 py-3 text-muted-foreground">{p.category}</td>
+                <td className="px-4 py-3 text-muted-foreground">{p.category ?? "—"}</td>
                 <td className="px-4 py-3 text-right font-mono">{formatPrice(p.price)}</td>
                 <td className="px-4 py-3 text-right font-mono">
                   {p.price_cup != null ? formatPrice(p.price_cup) : <span className="text-muted-foreground text-xs">—</span>}

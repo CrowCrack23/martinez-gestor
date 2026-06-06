@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requirePermission } from "@/lib/auth";
+import { hasRole, requirePermission } from "@/lib/auth";
 import { getCatalogProduct } from "@/lib/products";
 import { listStoresLite } from "@/lib/stores-lite";
 import { listCategoriesLite } from "@/lib/categories-lite";
@@ -14,7 +14,8 @@ type Params = Promise<{ id: string }>;
 type SP = Promise<{ error?: string; success?: string }>;
 
 export default async function ProductoDetallePage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  await requirePermission("productos");
+  const user = await requirePermission("productos");
+  const canDelete = hasRole(user, ["admin"]);
   const { id } = await params;
   const [p, sp, stores, categories] = await Promise.all([
     getCatalogProduct(id),
@@ -39,15 +40,17 @@ export default async function ProductoDetallePage({ params, searchParams }: { pa
           <ProductForm action={update} stores={stores} categories={categories} initial={p} submitLabel="Guardar cambios" />
         </CardContent>
       </Card>
-      <Card className="border-destructive/30">
-        <CardContent className="pt-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="font-medium">Eliminar producto</div>
-            <div className="text-sm text-muted-foreground">Lo quita del catálogo y de la tienda. No se puede deshacer.</div>
-          </div>
-          <form action={remove}><Button type="submit" variant="destructive">Eliminar</Button></form>
-        </CardContent>
-      </Card>
+      {canDelete && (
+        <Card className="border-destructive/30">
+          <CardContent className="pt-6 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="font-medium">Eliminar producto</div>
+              <div className="text-sm text-muted-foreground">Lo quita del catálogo y de la tienda. No se puede deshacer.</div>
+            </div>
+            <form action={remove}><Button type="submit" variant="destructive">Eliminar</Button></form>
+          </CardContent>
+        </Card>
+      )}
       <Button asChild variant="ghost"><Link href="/productos">← Volver</Link></Button>
     </div>
   );

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requirePermission, businessScope } from "@/lib/auth";
+import { hasRole, requirePermission, businessScope } from "@/lib/auth";
 import { getJournalEntry, listAccounts, JOURNAL_STATUS_BADGE, JOURNAL_STATUS_LABEL } from "@/lib/accounting";
 import { listBusinessesLite } from "@/lib/businesses";
 import { Button } from "@/components/ui/button";
@@ -113,12 +113,14 @@ export default async function AsientoDetallePage({ params, searchParams }: { par
           <form action={post}><Button type="submit" disabled={!balanced}>Contabilizar</Button></form>
         </CardContent>
       </Card>
-      <Card className="border-destructive/30">
-        <CardContent className="pt-6 flex items-center justify-between">
-          <div><div className="font-medium">Eliminar borrador</div><div className="text-sm text-muted-foreground">Solo disponible si el asiento aún no se ha contabilizado.</div></div>
-          <form action={remove}><Button type="submit" variant="destructive">Eliminar</Button></form>
-        </CardContent>
-      </Card>
+      {hasRole(user, ["admin"]) && (
+        <Card className="border-destructive/30">
+          <CardContent className="pt-6 flex items-center justify-between">
+            <div><div className="font-medium">Eliminar borrador</div><div className="text-sm text-muted-foreground">Solo disponible si el asiento aún no se ha contabilizado.</div></div>
+            <form action={remove}><Button type="submit" variant="destructive">Eliminar</Button></form>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -89,7 +89,7 @@ export default async function DineroRemesasPage({ searchParams }: { searchParams
             <div className="text-sm text-muted-foreground">Caja contable del negocio</div>
             <div className="text-xl font-semibold">{fmt(snapshot.cash.total)} CUP</div>
             <div className="text-xs text-muted-foreground">
-              Caja CUP {fmt(snapshot.cash.cup)} · Caja USD {fmt(snapshot.cash.usd)} · Banco {fmt(snapshot.cash.bank)}
+              Caja CUP {fmt(snapshot.cash.cup)} · Caja USD {fmt(snapshot.cash.usd)} USD · Banco {fmt(snapshot.cash.bank)}
             </div>
           </CardContent>
         </Card>

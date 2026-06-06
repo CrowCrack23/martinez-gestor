@@ -3,6 +3,7 @@ import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { createMovement } from "./inventory";
 import { generatePurchaseEntry } from "./auto-accounting";
+import { createCatalogProduct } from "./products";
 import type { PurchaseOrderStatus } from "./supabase-types";
 
 const TAG = "purchases";
@@ -11,7 +12,46 @@ function bust() {
   revalidateTag("inventory", "max");
 }
 
-export type PurchaseLineInput = { product_id: string; quantity: number; unit_cost: number };
+export type PurchaseLineInput = {
+  /** Vacío cuando la línea trae new_product (se crea el producto al vuelo). */
+  product_id: string;
+  quantity: number;
+  unit_cost: number;
+  /** Producto nuevo a crear antes de la orden: sin tienda (solo almacén), no visible online. */
+  new_product?: { name: string; price_cup: number | null; price_usd: number | null };
+};
+
+/**
+ * Crea los productos nuevos de las líneas (requisito del cliente: poder
+ * comprar productos que aún no existen y que entren al almacén) y devuelve
+ * las líneas con todos los product_id resueltos.
+ */
+async function resolveNewProducts(lines: PurchaseLineInput[]): Promise<PurchaseLineInput[]> {
+  const resolved: PurchaseLineInput[] = [];
+  for (const l of lines) {
+    if (!l.new_product) {
+      resolved.push(l);
+      continue;
+    }
+    const id = await createCatalogProduct({
+      name: l.new_product.name,
+      description: "",
+      price: l.new_product.price_usd ?? 0,
+      price_cup: l.new_product.price_cup,
+      price_eur: null,
+      old_price: null,
+      image: "",
+      category: null,
+      store: null,
+      shipping_time: null,
+      featured: false,
+      is_new: false,
+      online_visible: false,
+    });
+    resolved.push({ ...l, product_id: id, new_product: undefined });
+  }
+  return resolved;
+}
 
 export type PurchaseOrderSummary = {
   id: string;
@@ -188,6 +228,7 @@ export async function createPurchaseOrder(input: {
   lines: PurchaseLineInput[];
 }): Promise<string> {
   if (input.lines.length === 0) throw new Error("La orden debe tener al menos una línea.");
+  const lines = await resolveNewProducts(input.lines);
   const sb = getSupabase();
   const { data: po, error } = await sb
     .from("purchase_orders")
@@ -202,7 +243,7 @@ export async function createPurchaseOrder(input: {
     .single();
   if (error) throw error;
 
-  const payload = input.lines.map((l, i) => ({
+  const payload = lines.map((l, i) => ({
     purchase_order_id: po.id,
     product_id: l.product_id,
     quantity: l.quantity,
@@ -231,9 +272,10 @@ export async function updatePurchaseOrderHeader(
 
 export async function replacePurchaseOrderLines(
   id: string,
-  lines: PurchaseLineInput[],
+  inputLines: PurchaseLineInput[],
 ): Promise<void> {
-  if (lines.length === 0) throw new Error("La orden debe tener al menos una línea.");
+  if (inputLines.length === 0) throw new Error("La orden debe tener al menos una línea.");
+  const lines = await resolveNewProducts(inputLines);
   const sb = getSupabase();
   const { error: dErr } = await sb.from("purchase_order_lines").delete().eq("purchase_order_id", id);
   if (dErr) throw dErr;

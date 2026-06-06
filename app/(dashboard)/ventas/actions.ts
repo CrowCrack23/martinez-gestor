@@ -104,7 +104,8 @@ export async function cancelOrderAction(id: string) {
 }
 
 export async function deleteOrderAction(id: string) {
-  await requireRole(["admin", "vendedor"]);
+  // Borrar es exclusivo del dueño (requisito del cliente).
+  await requireRole(["admin"]);
   try { await deleteOrder(id); }
   catch (e) { redirect(`/ventas/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`); }
   redirect(`/ventas?success=Orden+eliminada`);

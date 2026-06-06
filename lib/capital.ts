@@ -4,6 +4,8 @@ import { getSupabase } from "./supabase";
 import { createJournalEntry, trialBalance } from "./accounting";
 import { stockValuation } from "./costing";
 import { listWarehouses } from "./warehouses";
+import { getRate } from "./currency";
+import { listContributions } from "./partners";
 import type { Database, WarehouseType } from "./supabase-types";
 
 // Trazabilidad del capital por negocio (requisito MIPYME): en todo momento
@@ -28,9 +30,17 @@ const ACC_BANCO = "1130";
 const ACC_CXC = "1200";
 const ACC_CXP = "2100";
 const ACC_INFRA = "1500";
+const ACC_OTROS_INGRESOS = "4900";
+const ACC_OTROS_GASTOS = "5400";
 
 export type CapitalSnapshot = {
-  cash: { cup: number; usd: number; bank: number; total: number };
+  /** Última tasa USD→CUP registrada (null si no hay; los equivalentes quedan null). */
+  usdRate: number | null;
+  // usd está en USD nativo; usdCup es su equivalente CUP (null sin tasa).
+  // total está en CUP (la caja USD entra convertida; 0 si no hay tasa).
+  cash: { cup: number; usd: number; usdCup: number | null; bank: number; total: number };
+  /** Capital aportado por los socios (saldo 3100 + desglose por moneda de los aportes). */
+  contributed: { cup: number; usd: number; total: number };
   inventory: {
     centro: number; // insumos / en elaboración (centro_elaboracion)
     almacen: number; // producto terminado (almacen_central)
@@ -53,19 +63,30 @@ function stageOf(type: WarehouseType): "centro" | "almacen" | "puntos" {
 }
 
 export async function capitalSnapshot(business: string): Promise<CapitalSnapshot> {
-  const [balance, valuation, warehouses, infrastructure] = await Promise.all([
+  const [balance, valuation, warehouses, infrastructure, usdRate, contributions] = await Promise.all([
     trialBalance({ business }),
     stockValuation(),
     listWarehouses([business]),
     sumFixedAssets(business),
+    getRate("USD"),
+    listContributions(business),
   ]);
 
   const byCode = new Map(balance.map((r) => [r.account_code, r.balance]));
   const cup = byCode.get(ACC_CAJA_CUP) ?? 0;
-  const usd = byCode.get(ACC_CAJA_USD) ?? 0;
+  const usd = byCode.get(ACC_CAJA_USD) ?? 0; // saldo nativo en USD
+  const usdCup = usdRate != null && usdRate > 0 ? Math.round(usd * usdRate * 100) / 100 : null;
   const bank = byCode.get(ACC_BANCO) ?? 0;
   const receivables = byCode.get(ACC_CXC) ?? 0;
   const payables = byCode.get(ACC_CXP) ?? 0;
+
+  // Capital aportado por socios, por moneda de aporte (fuente: capital_contributions).
+  const contributed = { cup: 0, usd: 0, total: 0 };
+  for (const c of contributions) {
+    if (c.currency === "USD") contributed.usd += c.amount;
+    else contributed.cup += c.amount;
+  }
+  contributed.total = contributed.cup + (usdRate != null ? Math.round(contributed.usd * usdRate * 100) / 100 : 0);
 
   // Inventario FIFO del negocio, agregado por almacén y por etapa.
   const valueByWarehouse = new Map<string, number>();
@@ -82,10 +103,14 @@ export async function capitalSnapshot(business: string): Promise<CapitalSnapshot
   }
   const inventoryTotal = inv.centro + inv.almacen + inv.puntos;
 
-  const cashTotal = cup + usd + bank;
+  // Total de efectivo en CUP: la caja USD entra convertida con la última tasa
+  // (si no hay tasa, no entra al total — la UI avisa).
+  const cashTotal = cup + (usdCup ?? 0) + bank;
   const moving = cashTotal + inventoryTotal + receivables - payables;
   return {
-    cash: { cup, usd, bank, total: cashTotal },
+    usdRate,
+    cash: { cup, usd, usdCup, bank, total: cashTotal },
+    contributed,
     inventory: { ...inv, total: inventoryTotal, byWarehouse },
     receivables,
     payables,
@@ -169,5 +194,68 @@ export async function addFixedAsset(input: {
   } catch (e) {
     console.error("[capital] asiento de activo fijo falló:", e);
   }
+  bust();
+}
+
+// ── Ingresos y gastos manuales ───────────────────────────────────────────
+
+/**
+ * Registra un ingreso o gasto simple del negocio sin pasar por el editor de
+ * asientos (requisito del cliente: "que en el capital me deje escribir los
+ * ingresos y los gastos... y que eso vaya para su respectivo lado").
+ *
+ * Genera el asiento (borrador):
+ *  - ingreso: Caja (1110 CUP | 1120 USD) DEBE / Otros ingresos (4900) HABER
+ *  - gasto:   Otros gastos (5400) DEBE / Caja (1110 | 1120) HABER
+ *
+ * El monto va en la moneda de la caja elegida (la 1120 se lleva en USD).
+ */
+export async function recordCashMovement(input: {
+  business_slug: string;
+  kind: "ingreso" | "gasto";
+  amount: number;
+  currency: "CUP" | "USD";
+  concept: string;
+  date: string;
+  created_by: string | null;
+}): Promise<void> {
+  if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Monto inválido.");
+  if (!input.concept.trim()) throw new Error("Escribe el concepto.");
+  const sb = getSupabase();
+
+  const cajaCode = input.currency === "USD" ? ACC_CAJA_USD : ACC_CAJA_CUP;
+  const otherCode = input.kind === "ingreso" ? ACC_OTROS_INGRESOS : ACC_OTROS_GASTOS;
+  const { data: accounts, error } = await sb
+    .from("accounts")
+    .select("id, code")
+    .in("code", [cajaCode, otherCode]);
+  if (error) throw error;
+  const byCode = new Map((accounts ?? []).map((a) => [a.code, a.id]));
+  const caja = byCode.get(cajaCode);
+  const other = byCode.get(otherCode);
+  if (!caja || !other) {
+    throw new Error(`Faltan cuentas ${cajaCode}/${otherCode} en el plan de cuentas (aplicar migración 0037).`);
+  }
+
+  const cajaLine = { account_id: caja, description: `Caja ${input.currency}` };
+  const otherLine = { account_id: other, description: input.concept };
+  await createJournalEntry({
+    entry_date: input.date,
+    description: `${input.kind === "ingreso" ? "Ingreso" : "Gasto"} — ${input.concept}`,
+    reference_type: "mov_caja",
+    reference_id: crypto.randomUUID(),
+    business: input.business_slug,
+    created_by: input.created_by,
+    lines:
+      input.kind === "ingreso"
+        ? [
+            { ...cajaLine, debit: input.amount, credit: 0 },
+            { ...otherLine, debit: 0, credit: input.amount },
+          ]
+        : [
+            { ...otherLine, debit: input.amount, credit: 0 },
+            { ...cajaLine, debit: 0, credit: input.amount },
+          ],
+  });
   bust();
 }

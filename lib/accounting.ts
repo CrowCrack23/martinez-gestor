@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
-import type { Database, AccountType, JournalEntryStatus } from "./supabase-types";
+import type { Database, AccountType, DeliveryCurrency, JournalEntryStatus } from "./supabase-types";
 
 const TAG = "accounting";
 function bust() { revalidateTag(TAG, "max"); }
@@ -199,13 +199,15 @@ export async function deleteJournalEntry(id: string) {
 
 export type TrialBalanceRow = {
   account_id: string; account_code: string; account_name: string; type: AccountType;
+  /** Moneda nativa de la cuenta; el balance queda en esta moneda (sin convertir). */
+  currency: DeliveryCurrency;
   debit: number; credit: number; balance: number;
 };
 
 export async function trialBalance(opts?: { from?: string; to?: string; postedOnly?: boolean; scope?: string[]; business?: string }): Promise<TrialBalanceRow[]> {
   const sb = getSupabase();
   let q = sb.from("journal_lines")
-    .select("debit,credit,account_id,journal_entries!inner(entry_date,status,business), accounts!inner(code,name,type)");
+    .select("debit,credit,account_id,journal_entries!inner(entry_date,status,business), accounts!inner(code,name,type,currency)");
   if (opts?.postedOnly) q = q.eq("journal_entries.status", "contabilizada");
   if (opts?.from) q = q.gte("journal_entries.entry_date", opts.from);
   if (opts?.to) q = q.lte("journal_entries.entry_date", opts.to);
@@ -216,7 +218,7 @@ export async function trialBalance(opts?: { from?: string; to?: string; postedOn
   type Row = {
     debit: number; credit: number; account_id: string;
     journal_entries: { entry_date: string; status: JournalEntryStatus } | null;
-    accounts: { code: string; name: string; type: AccountType } | null;
+    accounts: { code: string; name: string; type: AccountType; currency: DeliveryCurrency } | null;
   };
   const agg = new Map<string, TrialBalanceRow>();
   for (const r of (data ?? []) as unknown as Row[]) {
@@ -226,6 +228,7 @@ export async function trialBalance(opts?: { from?: string; to?: string; postedOn
       account_code: r.accounts.code,
       account_name: r.accounts.name,
       type: r.accounts.type,
+      currency: r.accounts.currency ?? "CUP",
       debit: 0, credit: 0, balance: 0,
     };
     cur.debit += Number(r.debit);

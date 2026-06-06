@@ -5,8 +5,8 @@ import { getSupabase } from "./supabase";
 export type ProductLite = {
   id: string;
   name: string;
-  store: string;
-  category: string;
+  store: string | null;
+  category: string | null;
   price: number;
   price_cup: number | null;
 };
@@ -18,10 +18,11 @@ export const listProductsLite = unstable_cache(
       .from("products")
       .select("id,name,store,category,price,product_prices(currency,price)")
       .order("name", { ascending: true });
-    if (scope) q = q.in("store", scope);
+    // Los productos sin tienda (solo almacén) son visibles para cualquier scope.
+    if (scope) q = q.or(`store.in.(${scope.join(",")}),store.is.null`);
     const { data, error } = await q;
     if (error) throw error;
-    type R = { id: string; name: string; store: string; category: string; price: number; product_prices: { currency: string; price: number }[] | null };
+    type R = { id: string; name: string; store: string | null; category: string | null; price: number; product_prices: { currency: string; price: number }[] | null };
     return ((data ?? []) as unknown as R[]).map((p) => {
       const cup = (p.product_prices ?? []).find((x) => x.currency === "CUP");
       return {
