@@ -1,7 +1,8 @@
 import "server-only";
 import { getSupabase } from "./supabase";
 import { createJournalEntry, type JournalLineInput } from "./accounting";
-import { movementCost } from "./costing";
+import { movementCostDual } from "./costing";
+import { getCurrentRate } from "./currency";
 import type { PaymentMethod, OrderOrigin } from "./supabase-types";
 
 // Generación automática de asientos contables (en borrador) a partir de los
@@ -35,7 +36,20 @@ const ACC = {
   salarios: "5200",
   comisionesVenta: "5250",
   pagoMensajeros: "5260",
+  // Descuadre CUP entre el costo histórico del inventario y el costo a tasa de
+  // venta (USD siempre 0 en sus líneas — no contamina el P&L en dólares).
+  diferenciaTasaInventario: "5310",
 } as const;
+
+/** Última tasa USD→CUP (sin bloqueo) para congelar el USD de asientos best-effort. */
+async function softRate(): Promise<number | null> {
+  try {
+    const r = await getCurrentRate();
+    return r?.rate ?? null;
+  } catch {
+    return null;
+  }
+}
 
 async function accountIdsByCode(codes: string[]): Promise<Map<string, string>> {
   const sb = getSupabase();
@@ -88,12 +102,16 @@ function revenueAccountForOrigin(origin: OrderOrigin): keyof typeof ACC {
 
 // ── Generadores ─────────────────────────────────────────────────────────────
 
-/** Compra recibida: Inventario (debe) / Cuentas por pagar (haber). */
+/** Compra recibida: Inventario (debe) / Cuentas por pagar (haber), con USD congelado. */
 export async function generatePurchaseEntry(input: {
   purchaseId: string;
   code: string;
   supplierName: string;
   total: number;
+  /** Total USD congelado en la orden (moneda funcional). */
+  totalUsd?: number | null;
+  /** Tasa USD→CUP congelada en la orden. */
+  rate?: number | null;
   business: string | null;
   date: string;
   userId: string | null;
@@ -103,9 +121,11 @@ export async function generatePurchaseEntry(input: {
     if (await entryExists("compra", input.purchaseId)) return;
     const acc = await accountIdsByCode([ACC.inventario, ACC.cxp]);
     const total = round2(input.total);
+    const rate = input.rate ?? (await softRate());
+    const totalUsd = input.totalUsd != null ? round2(input.totalUsd) : rate ? round2(total / rate) : 0;
     const lines: JournalLineInput[] = [
-      { account_id: acc.get(ACC.inventario)!, debit: total, credit: 0, description: "Inventario recibido" },
-      { account_id: acc.get(ACC.cxp)!, debit: 0, credit: total, description: `Por pagar a ${input.supplierName}` },
+      { account_id: acc.get(ACC.inventario)!, debit: total, credit: 0, debit_usd: totalUsd, credit_usd: 0, description: "Inventario recibido" },
+      { account_id: acc.get(ACC.cxp)!, debit: 0, credit: total, debit_usd: 0, credit_usd: totalUsd, description: `Por pagar a ${input.supplierName}` },
     ];
     await createJournalEntry({
       entry_date: input.date,
@@ -113,6 +133,7 @@ export async function generatePurchaseEntry(input: {
       reference_type: "compra",
       reference_id: input.purchaseId,
       business: input.business,
+      exchange_rate: rate,
       created_by: input.userId,
       lines,
     });
@@ -122,9 +143,12 @@ export async function generatePurchaseEntry(input: {
 }
 
 /**
- * Venta confirmada:
- *   Caja|Banco|CxC (debe) / Ventas (haber)  — por el ingreso
- *   Costo de ventas (debe) / Inventario (haber)  — por el COGS (si > 0)
+ * Venta confirmada — asiento DUAL (CUP + USD congelado a la tasa de la venta):
+ *   Caja|Banco|CxC (debe total CUP / amount_usd) / Ventas (haber, igual)
+ *   Costo de ventas (debe cogs_usd×tasa / cogs_usd) / Inventario (haber CUP
+ *   histórico / cogs_usd) — el descuadre CUP entre el costo a tasa de venta y
+ *   el costo histórico va a 5310 con USD = 0: el P&L USD queda limpio
+ *   (utilidad real = USD entrante − USD costo histórico) y el CUP cuadra.
  */
 export async function generateSaleEntry(input: {
   orderId: string;
@@ -137,29 +161,53 @@ export async function generateSaleEntry(input: {
   business: string | null;
   date: string;
   userId: string | null;
+  /** Tasa USD→CUP congelada al confirmar la venta (orders.sale_rate). */
+  rate?: number | null;
+  /** Monto USD congelado de la venta (orders.amount_usd). */
+  amountUsd?: number | null;
+  /** COGS USD congelado (orders.cogs_usd); si falta se lee de los consumos. */
+  cogsUsd?: number | null;
 }): Promise<void> {
   try {
     if (input.total <= 0) return;
     if (await entryExists("venta", input.orderId)) return;
 
-    const cogs = input.movementId ? round2(await movementCost(input.movementId)) : 0;
+    const dual = input.movementId ? await movementCostDual(input.movementId) : { cost: 0, cost_usd: 0 };
+    const cogsCupHist = round2(dual.cost);
+    const cogsUsd = round2(input.cogsUsd ?? dual.cost_usd);
+
+    const rate = input.rate ?? (await softRate());
+    const total = round2(input.total);
+    const amountUsd = input.amountUsd != null ? round2(input.amountUsd) : rate ? round2(total / rate) : 0;
+    // Costo de ventas en CUP a la tasa del día de la VENTA (valor de reposición).
+    const cogsCupVenta = rate ? round2(cogsUsd * rate) : cogsCupHist;
+    const tasaDiff = round2(cogsCupVenta - cogsCupHist);
+
     const debitCode = ACC[debitAccountForPayment(input.paymentMethod)];
     const revenueCode = ACC[revenueAccountForOrigin(input.origin)];
     const needed = [debitCode, revenueCode];
-    if (cogs > 0) needed.push(ACC.costoVentas, ACC.inventario);
+    const hasCogs = cogsCupHist > 0 || cogsUsd > 0;
+    if (hasCogs) needed.push(ACC.costoVentas, ACC.inventario);
+    if (hasCogs && tasaDiff !== 0) needed.push(ACC.diferenciaTasaInventario);
     const acc = await accountIdsByCode(needed);
 
-    const total = round2(input.total);
     const who = input.customerName ? ` — ${input.customerName}` : "";
     const lines: JournalLineInput[] = [
-      { account_id: acc.get(debitCode)!, debit: total, credit: 0, description: `Cobro venta ${input.code}` },
-      { account_id: acc.get(revenueCode)!, debit: 0, credit: total, description: `Venta ${input.code}` },
+      { account_id: acc.get(debitCode)!, debit: total, credit: 0, debit_usd: amountUsd, credit_usd: 0, description: `Cobro venta ${input.code}` },
+      { account_id: acc.get(revenueCode)!, debit: 0, credit: total, debit_usd: 0, credit_usd: amountUsd, description: `Venta ${input.code}` },
     ];
-    if (cogs > 0) {
+    if (hasCogs) {
       lines.push(
-        { account_id: acc.get(ACC.costoVentas)!, debit: cogs, credit: 0, description: "Costo de ventas" },
-        { account_id: acc.get(ACC.inventario)!, debit: 0, credit: cogs, description: "Salida de inventario" },
+        { account_id: acc.get(ACC.costoVentas)!, debit: cogsCupVenta, credit: 0, debit_usd: cogsUsd, credit_usd: 0, description: "Costo de ventas (a tasa de venta)" },
+        { account_id: acc.get(ACC.inventario)!, debit: 0, credit: cogsCupHist, debit_usd: 0, credit_usd: cogsUsd, description: "Salida de inventario (costo histórico)" },
       );
+      if (tasaDiff > 0) {
+        // El costo a tasa de venta excede el histórico: el exceso de DEBE se
+        // compensa con un HABER en 5310 (ganancia por tasa, solo CUP).
+        lines.push({ account_id: acc.get(ACC.diferenciaTasaInventario)!, debit: 0, credit: tasaDiff, debit_usd: 0, credit_usd: 0, description: "Diferencia de tasa de inventario" });
+      } else if (tasaDiff < 0) {
+        lines.push({ account_id: acc.get(ACC.diferenciaTasaInventario)!, debit: -tasaDiff, credit: 0, debit_usd: 0, credit_usd: 0, description: "Diferencia de tasa de inventario" });
+      }
     }
     await createJournalEntry({
       entry_date: input.date,
@@ -167,6 +215,7 @@ export async function generateSaleEntry(input: {
       reference_type: "venta",
       reference_id: input.orderId,
       business: input.business,
+      exchange_rate: rate,
       created_by: input.userId,
       lines,
     });
@@ -191,6 +240,9 @@ export async function generatePayrollEntry(input: {
 }): Promise<void> {
   try {
     const acc = await accountIdsByCode([ACC.salarios, ACC.salariosPorPagar, ACC.impuestos]);
+    // Salarios definidos en CUP (decisión del dueño); el USD se congela a la
+    // tasa del día de la corrida para que el P&L USD incluya la nómina.
+    const rate = await softRate();
     for (const g of input.groups) {
       const gross = round2(g.gross);
       if (gross <= 0) continue;
@@ -212,6 +264,7 @@ export async function generatePayrollEntry(input: {
         reference_type: "nomina",
         reference_id: refId,
         business: g.business,
+        exchange_rate: rate,
         created_by: input.userId,
         lines,
       });
@@ -239,6 +292,7 @@ export async function generateCommissionEntry(input: {
     if (commission <= 0) return;
     if (await entryExists("cuadre", input.closureId)) return;
     const acc = await accountIdsByCode([ACC.comisionesVenta, ACC.cajaCup]);
+    const rate = await softRate();
     const lines: JournalLineInput[] = [
       { account_id: acc.get(ACC.comisionesVenta)!, debit: commission, credit: 0, description: "Comisión del vendedor" },
       { account_id: acc.get(ACC.cajaCup)!, debit: 0, credit: commission, description: "Pago de comisión" },
@@ -249,6 +303,7 @@ export async function generateCommissionEntry(input: {
       reference_type: "cuadre",
       reference_id: input.closureId,
       business: input.business,
+      exchange_rate: rate,
       created_by: input.userId,
       lines,
     });
@@ -274,6 +329,8 @@ export async function generateRemittanceEntry(input: {
   spreadCup: number;
   date: string;
   userId: string | null;
+  /** Tasa USD→CUP de la remesa (congela el USD del asiento). */
+  rate?: number | null;
 }): Promise<void> {
   try {
     const commission = round2(input.commissionCup);
@@ -281,6 +338,7 @@ export async function generateRemittanceEntry(input: {
     const profit = round2(commission + spread);
     if (profit <= 0 && commission <= 0) return;
     if (await entryExists("remesa", input.remittanceId)) return;
+    const rate = input.rate ?? (await softRate());
     // Mismo mapeo que remittanceBusiness (lib/remittances.ts); duplicado aquí
     // para no crear un import circular remittances ↔ auto-accounting.
     const business = input.origin === "europa" ? "remesas_europa" : "remesas_eeuu";
@@ -302,6 +360,7 @@ export async function generateRemittanceEntry(input: {
       reference_type: "remesa",
       reference_id: input.remittanceId,
       business,
+      exchange_rate: rate,
       created_by: input.userId,
       lines,
     });
@@ -327,6 +386,7 @@ export async function generateCourierPayEntry(input: {
     if (amount <= 0) return;
     if (await entryExists("cuadre_remesas", input.closureId)) return;
     const acc = await accountIdsByCode([ACC.pagoMensajeros, ACC.cajaCup]);
+    const rate = await softRate();
     const lines: JournalLineInput[] = [
       { account_id: acc.get(ACC.pagoMensajeros)!, debit: amount, credit: 0, description: "Pago a mensajeros de la semana" },
       { account_id: acc.get(ACC.cajaCup)!, debit: 0, credit: amount, description: "Pago de mensajería" },
@@ -337,6 +397,7 @@ export async function generateCourierPayEntry(input: {
       reference_type: "cuadre_remesas",
       reference_id: input.closureId,
       business: input.business,
+      exchange_rate: rate,
       created_by: input.userId,
       lines,
     });

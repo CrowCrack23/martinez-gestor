@@ -2,7 +2,7 @@ import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { createMovement } from "./inventory";
-import { movementCost } from "./costing";
+import { movementCostDual } from "./costing";
 import type { Database, ProductionStatus } from "./supabase-types";
 
 const TAG = "production";
@@ -193,9 +193,11 @@ export async function produceOrder(id: string, userId: string): Promise<void> {
     lines: outLines,
   });
 
-  // El costo del producto terminado = costo real de los insumos / unidades producidas.
-  const inputCost = await movementCost(movOut);
-  const finishedUnitCost = producedQty > 0 ? inputCost / producedQty : 0;
+  // El costo del producto terminado = costo real de los insumos / unidades
+  // producidas, en ambas monedas (el USD viene congelado de los lotes consumidos).
+  const inputCost = await movementCostDual(movOut);
+  const finishedUnitCost = producedQty > 0 ? inputCost.cost / producedQty : 0;
+  const finishedUnitCostUsd = producedQty > 0 ? inputCost.cost_usd / producedQty : 0;
   const movIn = await createMovement({
     type: "entrada",
     warehouse_from: null,
@@ -204,7 +206,12 @@ export async function produceOrder(id: string, userId: string): Promise<void> {
     reference_id: po.id,
     user_id: userId,
     notes: `Producción ${po.code} — ${bom.name}`,
-    lines: [{ product_id: bom.product_id, quantity: producedQty, unit_cost: finishedUnitCost }],
+    lines: [{
+      product_id: bom.product_id,
+      quantity: producedQty,
+      unit_cost: finishedUnitCost,
+      unit_cost_usd: finishedUnitCostUsd,
+    }],
   });
 
   const { error } = await sb.from("production_orders").update({

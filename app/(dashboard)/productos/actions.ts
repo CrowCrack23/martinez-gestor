@@ -21,8 +21,9 @@ function parsePrice(form: FormData, key: string, label: string, required: boolea
 }
 
 function parseInput(form: FormData): ProductInput {
+  // USD funcional: el precio se define SOLO en USD; el CUP se calcula con la
+  // tasa del día al vender (no se guarda).
   const price = parsePrice(form, "price", "Precio", true)!;
-  const priceCup = parsePrice(form, "price_cup", "Precio CUP", false);
   const priceEur = parsePrice(form, "price_eur", "Precio EUR", false);
   const oldPrice = parsePrice(form, "old_price", "Precio anterior", false);
   // Tienda opcional: sin tienda = producto "solo almacén" (no se vende online).
@@ -33,7 +34,6 @@ function parseInput(form: FormData): ProductInput {
     name: requireString(form, "name", "Nombre"),
     description: optionalString(form, "description"),
     price,
-    price_cup: priceCup,
     price_eur: priceEur,
     old_price: oldPrice,
     image: optionalString(form, "image"),

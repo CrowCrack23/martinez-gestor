@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
-import { createLot, consumeFIFO, averageCost, bustCosting } from "./costing";
+import { createLot, consumeFIFO, averageCostDual, bustCosting } from "./costing";
 import type { InventoryMovementType } from "./supabase-types";
 
 const TAG = "inventory";
@@ -88,7 +88,13 @@ export async function updateStockBounds(
 
 // ── Movements ──────────────────────────────────────────────────────────────
 
-export type MovementLine = { product_id: string; quantity: number; unit_cost?: number | null };
+export type MovementLine = {
+  product_id: string;
+  quantity: number;
+  unit_cost?: number | null;
+  /** Costo USD congelado; si falta, se deriva de unit_cost / rate del movimiento. */
+  unit_cost_usd?: number | null;
+};
 
 export async function createMovement(input: {
   type: InventoryMovementType;
@@ -98,6 +104,8 @@ export async function createMovement(input: {
   reference_id?: string | null;
   user_id?: string | null;
   notes?: string;
+  /** Tasa USD→CUP del día; se usa para derivar/registrar el USD de los lotes de entrada. */
+  rate?: number | null;
   lines: MovementLine[];
 }): Promise<string> {
   if (input.lines.length === 0) throw new Error("El movimiento debe tener al menos una línea.");
@@ -117,11 +125,22 @@ export async function createMovement(input: {
     .single();
   if (error) throw error;
 
+  // USD congelado de una línea de entrada: explícito, o derivado del CUP con
+  // la tasa del movimiento.
+  const usdOf = (l: MovementLine): number => {
+    if (l.unit_cost_usd != null) return l.unit_cost_usd;
+    if (input.rate && input.rate > 0 && l.unit_cost != null) {
+      return Math.round((l.unit_cost / input.rate) * 100) / 100;
+    }
+    return 0;
+  };
+
   const linesPayload = input.lines.map((l) => ({
     movement_id: mov.id,
     product_id: l.product_id,
     quantity: l.quantity,
     unit_cost: l.unit_cost ?? null,
+    unit_cost_usd: l.unit_cost_usd ?? null,
   }));
   const { error: lErr } = await sb.from("inventory_movement_lines").insert(linesPayload);
   if (lErr) {
@@ -139,6 +158,8 @@ export async function createMovement(input: {
         product_id: l.product_id,
         warehouse_id: input.warehouse_to!,
         unit_cost: l.unit_cost ?? 0,
+        unit_cost_usd: usdOf(l),
+        rate: input.rate ?? null,
         quantity: l.quantity,
         source_type: source,
         source_id: input.reference_id ?? null,
@@ -153,8 +174,8 @@ export async function createMovement(input: {
       });
     } else if (input.type === "transferencia") {
       // Consumir del origen al costo FIFO y recrear el lote en destino al mismo
-      // costo promedio, para no perder la valuación al mover stock.
-      const { cost } = await consumeFIFO({
+      // costo promedio (dual), para no perder la valuación al mover stock.
+      const { cost, cost_usd } = await consumeFIFO({
         product_id: l.product_id,
         warehouse_id: input.warehouse_from!,
         quantity: l.quantity,
@@ -164,6 +185,8 @@ export async function createMovement(input: {
         product_id: l.product_id,
         warehouse_id: input.warehouse_to!,
         unit_cost: l.quantity > 0 ? cost / l.quantity : 0,
+        unit_cost_usd: l.quantity > 0 ? cost_usd / l.quantity : 0,
+        rate: input.rate ?? null,
         quantity: l.quantity,
         source_type: "transferencia",
         source_id: input.reference_id ?? null,
@@ -172,11 +195,19 @@ export async function createMovement(input: {
     } else if (input.type === "ajuste") {
       // La línea trae el delta con signo: positivo crea lote, negativo consume.
       if (l.quantity > 0) {
-        const cost = l.unit_cost ?? (await averageCost(l.product_id, input.warehouse_to!));
+        let cost = l.unit_cost ?? null;
+        let costUsd = l.unit_cost_usd ?? null;
+        if (cost == null || costUsd == null) {
+          const avg = await averageCostDual(l.product_id, input.warehouse_to!);
+          cost ??= avg.cup;
+          costUsd ??= avg.usd > 0 ? avg.usd : usdOf({ ...l, unit_cost: cost });
+        }
         await createLot({
           product_id: l.product_id,
           warehouse_id: input.warehouse_to!,
           unit_cost: cost,
+          unit_cost_usd: costUsd,
+          rate: input.rate ?? null,
           quantity: l.quantity,
           source_type: "ajuste",
           source_id: input.reference_id ?? null,

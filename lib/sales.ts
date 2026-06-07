@@ -2,9 +2,9 @@ import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { createMovement } from "./inventory";
-import { movementCost } from "./costing";
+import { movementCostDual } from "./costing";
 import { generateSaleEntry } from "./auto-accounting";
-import { getLatestRate } from "./remittances";
+import { assertFreshRate, priceCupFromUsd } from "./currency";
 import type { OrderCurrency, OrderOrigin, OrderStatus, PaymentMethod } from "./supabase-types";
 
 const TAG = "sales";
@@ -292,6 +292,38 @@ export async function confirmOrder(id: string, userId: string): Promise<void> {
   if (o.status !== "borrador") throw new Error(`No se puede confirmar una orden en estado ${o.status}.`);
   if (o.lines.length === 0) throw new Error("La orden no tiene líneas.");
 
+  // USD funcional: tasa del día obligatoria (bloquea si está vieja) y precios
+  // recalculados desde el precio USD del producto (espejo de confirm_pos_order).
+  const rate = await assertFreshRate();
+
+  const productIds = Array.from(new Set(o.lines.map((l) => l.product_id)));
+  const { data: prods, error: pErr } = await sb
+    .from("products")
+    .select("id, price")
+    .in("id", productIds);
+  if (pErr) throw pErr;
+  const priceUsdById = new Map((prods ?? []).map((p) => [p.id as string, Number(p.price)]));
+  for (const l of o.lines) {
+    const priceUsd = priceUsdById.get(l.product_id);
+    if (!priceUsd || priceUsd <= 0) {
+      throw new Error(`El producto "${l.product_name}" no tiene precio USD definido; ponlo en /productos antes de vender.`);
+    }
+    const { error: uErr } = await sb
+      .from("order_lines")
+      .update({ unit_price: priceCupFromUsd(priceUsd, rate), unit_price_usd: priceUsd })
+      .eq("id", l.id);
+    if (uErr) throw uErr;
+  }
+  // Total repreciado por el trigger de líneas.
+  const { data: fresh, error: tErr } = await sb
+    .from("orders")
+    .select("total_amount")
+    .eq("id", id)
+    .single();
+  if (tErr) throw tErr;
+  const total = Number(fresh.total_amount ?? 0);
+  const amountUsd = Math.round((total / rate) * 100) / 100;
+
   const movementId = await createMovement({
     type: "salida",
     warehouse_from: o.warehouse_id,
@@ -304,19 +336,8 @@ export async function confirmOrder(id: string, userId: string): Promise<void> {
     lines: o.lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity })),
   });
 
-  // COGS congelado al confirmar (lo usan comisiones por ganancia y cuadres).
-  const cogs = await movementCost(movementId);
-
-  // Venta cobrada en USD: snapshot de la tasa del día y monto en dólares.
-  // total_amount sigue en CUP (lo recalcula el trigger desde las líneas).
-  let saleRate: number | null = null;
-  let amountUsd: number | null = null;
-  if (o.currency === "USD") {
-    const rate = await getLatestRate("USD", "CUP");
-    if (!rate) throw new Error("No hay tasa USD→CUP registrada; registra la tasa del día antes de vender en USD.");
-    saleRate = rate.rate;
-    amountUsd = Math.round((o.total_amount / rate.rate) * 100) / 100;
-  }
+  // COGS dual congelado al confirmar (CUP histórico + USD real de los lotes).
+  const { cost: cogs, cost_usd: cogsUsd } = await movementCostDual(movementId);
 
   const { error } = await sb
     .from("orders")
@@ -326,23 +347,28 @@ export async function confirmOrder(id: string, userId: string): Promise<void> {
       confirmed_at: new Date().toISOString(),
       movement_id: movementId,
       cogs_total: cogs,
-      ...(saleRate != null ? { sale_rate: saleRate, amount_usd: amountUsd } : {}),
+      cogs_usd: cogsUsd,
+      sale_rate: rate,
+      amount_usd: amountUsd,
     })
     .eq("id", id);
   if (error) throw error;
 
-  // Asiento contable automático (borrador): Cobro/CxC / Ventas + Costo de ventas / Inventario.
+  // Asiento contable automático (borrador), dual CUP/USD (ver auto-accounting).
   await generateSaleEntry({
     orderId: o.id,
     code: o.code,
     customerName: o.customer_name,
-    total: o.total_amount,
+    total,
     paymentMethod: o.payment_method,
     origin: o.origin,
     movementId,
     business: o.warehouse_store,
     date: new Date().toISOString().slice(0, 10),
     userId,
+    rate,
+    amountUsd,
+    cogsUsd,
   });
   bust();
 }

@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createMovement, type MovementLine } from "@/lib/inventory";
+import { getCurrentRate } from "@/lib/currency";
 import type { InventoryMovementType } from "@/lib/supabase-types";
 import { optionalString, ValidationError } from "@/lib/validation";
 
@@ -52,12 +53,15 @@ export async function createMovementAction(formData: FormData) {
     }
     if (lines.length === 0) throw new ValidationError("Agrega al menos una línea válida.");
 
+    // Tasa del día para congelar el USD de los lotes de entrada/ajuste.
+    const current = await getCurrentRate();
     await createMovement({
       type,
       warehouse_from: warehouseFrom,
       warehouse_to: warehouseTo,
       user_id: user.id,
       notes: optionalString(formData, "notes"),
+      rate: current && !current.stale ? current.rate : null,
       lines,
     });
   } catch (e) {

@@ -4,6 +4,7 @@ import { getSupabase } from "./supabase";
 import { createMovement } from "./inventory";
 import { generatePurchaseEntry } from "./auto-accounting";
 import { createCatalogProduct } from "./products";
+import { assertFreshRate } from "./currency";
 import type { PurchaseOrderStatus } from "./supabase-types";
 
 const TAG = "purchases";
@@ -12,13 +13,18 @@ function bust() {
   revalidateTag("inventory", "max");
 }
 
+// USD funcional: el costo de compra se captura EN USD (es la cifra real del
+// negocio); el CUP se deriva con la tasa del día y queda congelado junto con
+// la tasa en la orden. El FIFO recibe ambos costos.
+
 export type PurchaseLineInput = {
   /** Vacío cuando la línea trae new_product (se crea el producto al vuelo). */
   product_id: string;
   quantity: number;
-  unit_cost: number;
+  /** Costo unitario en USD (moneda funcional). */
+  unit_cost_usd: number;
   /** Producto nuevo a crear antes de la orden: sin tienda (solo almacén), no visible online. */
-  new_product?: { name: string; price_cup: number | null; price_usd: number | null };
+  new_product?: { name: string; price_usd: number | null };
 };
 
 /**
@@ -37,7 +43,6 @@ async function resolveNewProducts(lines: PurchaseLineInput[]): Promise<PurchaseL
       name: l.new_product.name,
       description: "",
       price: l.new_product.price_usd ?? 0,
-      price_cup: l.new_product.price_cup,
       price_eur: null,
       old_price: null,
       image: "",
@@ -122,6 +127,7 @@ export type PurchaseLine = {
   product_name: string;
   quantity: number;
   unit_cost: number;
+  unit_cost_usd: number | null;
   line_total: number;
   position: number;
 };
@@ -138,6 +144,10 @@ export type PurchaseOrderDetail = {
   reference: string;
   notes: string;
   total_amount: number;
+  /** Tasa USD→CUP congelada al crear la orden. */
+  rate: number | null;
+  /** Total en USD (moneda funcional) congelado. */
+  total_usd: number | null;
   created_at: string;
   received_at: string | null;
   movement_id: string | null;
@@ -149,7 +159,7 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
   const { data, error } = await sb
     .from("purchase_orders")
     .select(
-      "id,code,status,supplier_id,warehouse_id,reference,notes,total_amount,created_at,received_at,movement_id,suppliers!inner(name),warehouses!inner(name,store_slug)",
+      "id,code,status,supplier_id,warehouse_id,reference,notes,total_amount,rate,total_usd,created_at,received_at,movement_id,suppliers!inner(name),warehouses!inner(name,store_slug)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -160,7 +170,7 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
 
   const { data: rawLines, error: lErr } = await sb
     .from("purchase_order_lines")
-    .select("id,product_id,quantity,unit_cost,line_total,position,products!inner(name)")
+    .select("id,product_id,quantity,unit_cost,unit_cost_usd,line_total,position,products!inner(name)")
     .eq("purchase_order_id", id)
     .order("position");
   if (lErr) throw lErr;
@@ -170,6 +180,7 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
     product_id: string;
     quantity: number;
     unit_cost: number;
+    unit_cost_usd: number | null;
     line_total: number;
     position: number;
     products: { name: string } | null;
@@ -180,6 +191,7 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
     product_name: r.products?.name ?? "",
     quantity: r.quantity,
     unit_cost: Number(r.unit_cost),
+    unit_cost_usd: r.unit_cost_usd == null ? null : Number(r.unit_cost_usd),
     line_total: Number(r.line_total),
     position: r.position,
   }));
@@ -193,6 +205,8 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
     reference: string;
     notes: string;
     total_amount: number;
+    rate: number | null;
+    total_usd: number | null;
     created_at: string;
     received_at: string | null;
     movement_id: string | null;
@@ -212,6 +226,8 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
     reference: d.reference,
     notes: d.notes,
     total_amount: Number(d.total_amount),
+    rate: d.rate == null ? null : Number(d.rate),
+    total_usd: d.total_usd == null ? null : Number(d.total_usd),
     created_at: d.created_at,
     received_at: d.received_at,
     movement_id: d.movement_id,
@@ -228,7 +244,10 @@ export async function createPurchaseOrder(input: {
   lines: PurchaseLineInput[];
 }): Promise<string> {
   if (input.lines.length === 0) throw new Error("La orden debe tener al menos una línea.");
+  // Tasa del día congelada en la orden (bloquea si está vieja).
+  const rate = await assertFreshRate();
   const lines = await resolveNewProducts(input.lines);
+  const totalUsd = round2(lines.reduce((s, l) => s + l.quantity * l.unit_cost_usd, 0));
   const sb = getSupabase();
   const { data: po, error } = await sb
     .from("purchase_orders")
@@ -237,6 +256,8 @@ export async function createPurchaseOrder(input: {
       warehouse_id: input.warehouse_id,
       reference: input.reference,
       notes: input.notes,
+      rate,
+      total_usd: totalUsd,
       created_by: input.created_by,
     })
     .select("id")
@@ -247,7 +268,8 @@ export async function createPurchaseOrder(input: {
     purchase_order_id: po.id,
     product_id: l.product_id,
     quantity: l.quantity,
-    unit_cost: l.unit_cost,
+    unit_cost: round2(l.unit_cost_usd * rate),
+    unit_cost_usd: round2(l.unit_cost_usd),
     position: i,
   }));
   const { error: lErr } = await sb.from("purchase_order_lines").insert(payload);
@@ -257,6 +279,10 @@ export async function createPurchaseOrder(input: {
   }
   bust();
   return po.id;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 export async function updatePurchaseOrderHeader(
@@ -275,7 +301,10 @@ export async function replacePurchaseOrderLines(
   inputLines: PurchaseLineInput[],
 ): Promise<void> {
   if (inputLines.length === 0) throw new Error("La orden debe tener al menos una línea.");
+  // Editar líneas re-congela la tasa del día (los costos USD son los pactados).
+  const rate = await assertFreshRate();
   const lines = await resolveNewProducts(inputLines);
+  const totalUsd = round2(lines.reduce((s, l) => s + l.quantity * l.unit_cost_usd, 0));
   const sb = getSupabase();
   const { error: dErr } = await sb.from("purchase_order_lines").delete().eq("purchase_order_id", id);
   if (dErr) throw dErr;
@@ -283,11 +312,14 @@ export async function replacePurchaseOrderLines(
     purchase_order_id: id,
     product_id: l.product_id,
     quantity: l.quantity,
-    unit_cost: l.unit_cost,
+    unit_cost: round2(l.unit_cost_usd * rate),
+    unit_cost_usd: round2(l.unit_cost_usd),
     position: i,
   }));
   const { error } = await sb.from("purchase_order_lines").insert(payload);
   if (error) throw error;
+  const { error: hErr } = await sb.from("purchase_orders").update({ rate, total_usd: totalUsd }).eq("id", id);
+  if (hErr) throw hErr;
   bust();
 }
 
@@ -298,7 +330,8 @@ export async function receivePurchaseOrder(id: string, userId: string): Promise<
   if (po.status !== "borrador") throw new Error(`No se puede recibir una orden en estado ${po.status}.`);
   if (po.lines.length === 0) throw new Error("La orden no tiene líneas.");
 
-  // Crear el movimiento de entrada
+  // Crear el movimiento de entrada con costo dual; los lotes congelan el USD
+  // pactado en la orden (la tasa de la orden, no la del día de recepción).
   const movementId = await createMovement({
     type: "entrada",
     warehouse_from: null,
@@ -307,7 +340,13 @@ export async function receivePurchaseOrder(id: string, userId: string): Promise<
     reference_id: po.id,
     user_id: userId,
     notes: `Recepción ${po.code}${po.reference ? ` — fact. ${po.reference}` : ""}`,
-    lines: po.lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity, unit_cost: l.unit_cost })),
+    rate: po.rate,
+    lines: po.lines.map((l) => ({
+      product_id: l.product_id,
+      quantity: l.quantity,
+      unit_cost: l.unit_cost,
+      unit_cost_usd: l.unit_cost_usd,
+    })),
   });
 
   const { error } = await sb
@@ -321,12 +360,15 @@ export async function receivePurchaseOrder(id: string, userId: string): Promise<
     .eq("id", id);
   if (error) throw error;
 
-  // Asiento contable automático (borrador): Inventario / Cuentas por pagar.
+  // Asiento contable automático (borrador): Inventario / Cuentas por pagar,
+  // con el USD congelado de la orden.
   await generatePurchaseEntry({
     purchaseId: po.id,
     code: po.code,
     supplierName: po.supplier_name,
     total: po.total_amount,
+    totalUsd: po.total_usd,
+    rate: po.rate,
     business: po.warehouse_store,
     date: new Date().toISOString().slice(0, 10),
     userId,

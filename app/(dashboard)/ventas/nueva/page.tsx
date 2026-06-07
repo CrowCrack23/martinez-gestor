@@ -14,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
 import { OrderLineEditor } from "@/components/order-line-editor";
+import { RateBanner } from "@/components/rate-banner";
+import { getCurrentRate } from "@/lib/currency";
 import { createOrderAction } from "../actions";
 
 type SP = Promise<{ error?: string }>;
@@ -21,8 +23,8 @@ type SP = Promise<{ error?: string }>;
 export default async function NuevaVentaPage({ searchParams }: { searchParams: SP }) {
   const user = await requireRole(["admin", "vendedor"]);
   const scope = businessScope(user);
-  const [customers, warehouses, products, sp] = await Promise.all([
-    listCustomers(), listWarehouses(scope), listProductsLite(scope), searchParams,
+  const [customers, warehouses, products, rate, sp] = await Promise.all([
+    listCustomers(), listWarehouses(scope), listProductsLite(scope), getCurrentRate(), searchParams,
   ]);
   const activeWarehouses = warehouses.filter((w) => w.active);
   const activeCustomers = customers.filter((c) => c.active);
@@ -31,8 +33,9 @@ export default async function NuevaVentaPage({ searchParams }: { searchParams: S
     <div className="max-w-3xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Nueva venta</h1>
-        <p className="text-sm text-muted-foreground">Se crea en estado borrador. Al confirmar, el stock se descuenta del almacén seleccionado.</p>
+        <p className="text-sm text-muted-foreground">Los precios salen del precio USD de cada producto × tasa del día. Se crea en estado borrador; al confirmar, el stock se descuenta del almacén seleccionado.</p>
       </div>
+      <RateBanner />
       <Flash error={sp.error} />
       {activeWarehouses.length === 0 && (
         <div className="rounded-md border border-warning/30 bg-warning/10 text-sm px-3 py-2">
@@ -83,7 +86,7 @@ export default async function NuevaVentaPage({ searchParams }: { searchParams: S
                 <Input id="reference" name="reference" placeholder="Nº pedido web, etc." />
               </div>
             </div>
-            <OrderLineEditor products={products} />
+            <OrderLineEditor products={products} rate={rate && !rate.stale ? rate.rate : null} />
             <div className="space-y-2">
               <Label htmlFor="notes">Notas</Label>
               <Textarea id="notes" name="notes" rows={2} />

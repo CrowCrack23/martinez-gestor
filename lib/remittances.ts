@@ -138,6 +138,7 @@ export async function payRemittance(id: string, userId: string, delivery?: Remit
   if (error) throw error;
 
   // Asiento contable automático (borrador), en el negocio del origen.
+  // La tasa de la remesa congela el USD del asiento (USD funcional, 0040).
   await generateRemittanceEntry({
     remittanceId: r.id,
     code: r.code,
@@ -146,6 +147,7 @@ export async function payRemittance(id: string, userId: string, delivery?: Remit
     spreadCup,
     date: new Date().toISOString().slice(0, 10),
     userId,
+    rate: Number(r.exchange_rate) || null,
   });
 
   // Si entregó un mensajero con tenedor de dinero vinculado, registrar que él

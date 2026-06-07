@@ -23,10 +23,10 @@ function parseLines(form: FormData): PurchaseLineInput[] {
   const modes = form.getAll("line_mode").map(String);
   const productIds = form.getAll("product_id").map(String);
   const newNames = form.getAll("new_name").map(String);
-  const newPricesCup = form.getAll("new_price_cup").map(String);
   const newPricesUsd = form.getAll("new_price_usd").map(String);
   const quantities = form.getAll("quantity").map((v) => Number(v));
-  const costs = form.getAll("unit_cost").map((v) => Number(v));
+  // USD funcional: el costo de compra se captura en dólares.
+  const costs = form.getAll("unit_cost_usd").map((v) => Number(v));
   if (productIds.length === 0) throw new ValidationError("Agrega al menos una línea.");
   if (productIds.length !== quantities.length || productIds.length !== costs.length) {
     throw new ValidationError("Datos de líneas inconsistentes.");
@@ -45,17 +45,16 @@ function parseLines(form: FormData): PurchaseLineInput[] {
       throw new ValidationError(`Cantidad inválida en línea ${i + 1} (debe ser un entero > 0).`);
     }
     if (!Number.isFinite(cost) || cost < 0) {
-      throw new ValidationError(`Costo inválido en línea ${i + 1}.`);
+      throw new ValidationError(`Costo USD inválido en línea ${i + 1}.`);
     }
     lines.push({
       product_id: isNew ? "" : pid,
       quantity: qty,
-      unit_cost: cost,
+      unit_cost_usd: cost,
       ...(isNew
         ? {
             new_product: {
               name,
-              price_cup: parseOptionalPrice(newPricesCup[i] ?? "", "Precio CUP", i + 1),
               price_usd: parseOptionalPrice(newPricesUsd[i] ?? "", "Precio USD", i + 1),
             },
           }

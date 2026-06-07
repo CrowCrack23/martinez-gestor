@@ -3,9 +3,11 @@ import { Plus, Check } from "lucide-react";
 import { requirePermission, businessScope } from "@/lib/auth";
 import { listCatalog } from "@/lib/products";
 import { listStoresLite } from "@/lib/stores-lite";
+import { getCurrentRate, priceCupFromUsd } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
+import { RateBanner } from "@/components/rate-banner";
 import { formatPrice } from "@/lib/format";
 
 type SP = Promise<{ store?: string; success?: string; error?: string }>;
@@ -14,10 +16,12 @@ export default async function ProductosPage({ searchParams }: { searchParams: SP
   const user = await requirePermission("productos");
   const scope = businessScope(user);
   const sp = await searchParams;
-  const [rows, stores] = await Promise.all([
+  const [rows, stores, rate] = await Promise.all([
     listCatalog({ store: sp.store || undefined, scope }),
     listStoresLite(),
+    getCurrentRate(),
   ]);
+  const dayRate = rate && !rate.stale ? rate.rate : null;
   const storeLabel = (slug: string | null) =>
     slug == null ? "— (solo almacén)" : (stores.find((s) => s.slug === slug)?.label ?? slug);
 
@@ -33,6 +37,7 @@ export default async function ProductosPage({ searchParams }: { searchParams: SP
         </Button>
       </div>
 
+      <RateBanner />
       <Flash success={sp.success} error={sp.error} />
 
       <Card className="p-4">
@@ -58,7 +63,7 @@ export default async function ProductosPage({ searchParams }: { searchParams: SP
               <th className="px-4 py-3 font-medium">Tienda</th>
               <th className="px-4 py-3 font-medium">Categoría</th>
               <th className="px-4 py-3 font-medium text-right">Precio USD</th>
-              <th className="px-4 py-3 font-medium text-right">Precio CUP</th>
+              <th className="px-4 py-3 font-medium text-right">Precio CUP (hoy)</th>
               <th className="px-4 py-3 font-medium text-center">Online</th>
             </tr>
           </thead>
@@ -79,7 +84,9 @@ export default async function ProductosPage({ searchParams }: { searchParams: SP
                 <td className="px-4 py-3 text-muted-foreground">{p.category ?? "—"}</td>
                 <td className="px-4 py-3 text-right font-mono">{formatPrice(p.price)}</td>
                 <td className="px-4 py-3 text-right font-mono">
-                  {p.price_cup != null ? formatPrice(p.price_cup) : <span className="text-muted-foreground text-xs">—</span>}
+                  {dayRate != null && p.price > 0
+                    ? `${priceCupFromUsd(p.price, dayRate)} CUP`
+                    : <span className="text-muted-foreground text-xs">—</span>}
                 </td>
                 <td className="px-4 py-3 text-center">
                   {p.online_visible

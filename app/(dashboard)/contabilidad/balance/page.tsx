@@ -6,11 +6,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BusinessFilter } from "@/components/business-filter";
+import { RateBanner } from "@/components/rate-banner";
 import { formatPrice } from "@/lib/format";
-import { getRates, getRate, toCup, cupToUsd, formatUsd } from "@/lib/currency";
+import { formatUsd } from "@/lib/currency";
 import type { AccountType } from "@/lib/supabase-types";
 
 type SP = Promise<{ from?: string; to?: string; posted?: string; business?: string }>;
+
+// Balance dual — USD funcional: la columna rectora es el saldo USD CONGELADO
+// por transacción (no una conversión a tasa de hoy); el CUP acompaña.
 
 export default async function BalancePage({ searchParams }: { searchParams: SP }) {
   const user = await requirePermission("contabilidad");
@@ -19,37 +23,26 @@ export default async function BalancePage({ searchParams }: { searchParams: SP }
   const scope = businessScope(user);
   const business = sp.business && (!scope || scope.includes(sp.business)) ? sp.business : undefined;
   const businesses = (await listBusinessesLite()).filter((b) => !scope || scope.includes(b.slug));
-  const [rows, rates, usdRate] = await Promise.all([
-    trialBalance({ from: sp.from, to: sp.to, postedOnly, scope, business }),
-    getRates(),
-    getRate("USD"),
-  ]);
+  const rows = await trialBalance({ from: sp.from, to: sp.to, postedOnly, scope, business });
 
   const groups: Record<AccountType, typeof rows> = {
     activo: [], pasivo: [], patrimonio: [], ingreso: [], gasto: [],
   };
   for (const r of rows) groups[r.type].push(r);
 
-  // Saldo en CUP de una fila (las cuentas USD/EUR se convierten con la última
-  // tasa; null si no hay tasa registrada).
-  const balCup = (r: (typeof rows)[number]) => toCup(r.balance, r.currency, rates);
-  const sumCup = (list: typeof rows) => list.reduce<number>((s, r) => s + (balCup(r) ?? 0), 0);
-  const missingRate = rows.some((r) => r.currency !== "CUP" && balCup(r) == null);
+  const sumCup = (list: typeof rows) => list.reduce((s, r) => s + r.balance, 0);
+  const sumUsd = (list: typeof rows) => list.reduce((s, r) => s + r.balance_usd, 0);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Balance de comprobación</h1>
         <p className="text-sm text-muted-foreground">
-          Saldo por cuenta. Por defecto solo asientos contabilizados.
-          {usdRate != null && <> Tasa USD: <span className="font-mono">{usdRate}</span> CUP.</>}
+          Saldos en USD (moneda rectora, congelados a la tasa del día de cada operación) y en CUP.
+          Por defecto solo asientos contabilizados.
         </p>
       </div>
-      {missingRate && (
-        <div className="rounded-md border border-warning/30 bg-warning/10 text-sm px-3 py-2">
-          Hay cuentas en USD/EUR sin tasa registrada: sus saldos no entran en los totales CUP. Registra una tasa en /remesas/tasas.
-        </div>
-      )}
+      <RateBanner />
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap items-end gap-3">
@@ -80,39 +73,31 @@ export default async function BalancePage({ searchParams }: { searchParams: SP }
             <thead className="text-left text-muted-foreground border-b">
               <tr>
                 <th className="px-4 py-3 font-medium" colSpan={2}>{ACCOUNT_TYPE_LABEL[t]}</th>
-                <th className="px-4 py-3 font-medium text-right">Debe</th>
-                <th className="px-4 py-3 font-medium text-right">Haber</th>
-                <th className="px-4 py-3 font-medium text-right">Saldo</th>
+                <th className="px-4 py-3 font-medium text-right">Saldo USD</th>
+                <th className="px-4 py-3 font-medium text-right">Saldo CUP</th>
               </tr>
             </thead>
             <tbody>
               {list.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-3 text-center text-muted-foreground text-xs">Sin movimientos.</td></tr>
+                <tr><td colSpan={4} className="px-4 py-3 text-center text-muted-foreground text-xs">Sin movimientos.</td></tr>
               )}
               {list.map((r) => (
                 <tr key={r.account_id} className="border-b last:border-b-0">
                   <td className="px-4 py-2 font-mono text-xs">{r.account_code}</td>
-                  <td className="px-4 py-2">
-                    {r.account_name}
-                    {r.currency !== "CUP" && <span className="ml-1 text-xs text-muted-foreground">({r.currency})</span>}
+                  <td className="px-4 py-2">{r.account_name}</td>
+                  <td className={`px-4 py-2 text-right font-mono font-medium ${r.balance_usd < 0 ? "text-destructive" : ""}`}>
+                    {formatUsd(r.balance_usd)}
                   </td>
-                  <td className="px-4 py-2 text-right font-mono">{r.currency === "CUP" ? formatPrice(r.debit) : `${r.debit.toFixed(2)} ${r.currency}`}</td>
-                  <td className="px-4 py-2 text-right font-mono">{r.currency === "CUP" ? formatPrice(r.credit) : `${r.credit.toFixed(2)} ${r.currency}`}</td>
-                  <td className={`px-4 py-2 text-right font-mono ${r.balance < 0 ? "text-destructive" : ""}`}>
-                    {r.currency === "CUP" ? formatPrice(r.balance) : (
-                      <>
-                        {r.balance.toFixed(2)} {r.currency}
-                        <div className="text-xs text-muted-foreground">{balCup(r) != null ? `≈ ${formatPrice(balCup(r)!)}` : "sin tasa"}</div>
-                      </>
-                    )}
+                  <td className={`px-4 py-2 text-right font-mono text-muted-foreground ${r.balance < 0 ? "text-destructive" : ""}`}>
+                    {formatPrice(r.balance)}
                   </td>
                 </tr>
               ))}
               {list.length > 0 && (
                 <tr className="font-medium border-t">
                   <td colSpan={2} className="px-4 py-2">Subtotal {ACCOUNT_TYPE_LABEL[t]}</td>
-                  <td colSpan={2} className="px-4 py-2 text-right text-xs text-muted-foreground">≈ {formatUsd(cupToUsd(sumCup(list), usdRate))}</td>
-                  <td className="px-4 py-2 text-right font-mono">{formatPrice(sumCup(list))}</td>
+                  <td className="px-4 py-2 text-right font-mono">{formatUsd(sumUsd(list))}</td>
+                  <td className="px-4 py-2 text-right font-mono text-muted-foreground">{formatPrice(sumCup(list))}</td>
                 </tr>
               )}
             </tbody>

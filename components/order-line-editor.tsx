@@ -6,69 +6,87 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { formatPrice } from "@/lib/format";
 
-export type LineProduct = { id: string; name: string; store: string | null; price: number; price_cup?: number | null };
-export type InitialLine = { product_id: string; quantity: number; unit_price: number };
+export type LineProduct = { id: string; name: string; store: string | null; price: number };
+export type InitialLine = { product_id: string; quantity: number };
 
-type Row = { uid: number; product_id: string; quantity: string; unit_price: string };
+type Row = { uid: number; product_id: string; quantity: string };
 
+/**
+ * Editor de líneas de venta — USD funcional: el precio NO se escribe; se
+ * calcula desde el precio USD del producto × tasa del día (múltiplo de 5 CUP
+ * hacia arriba). Al confirmar, el servidor lo recalcula igual (anti-error).
+ */
 export function OrderLineEditor({
   products,
   initialLines,
+  rate,
 }: {
   products: LineProduct[];
   initialLines?: InitialLine[];
+  /** Tasa USD→CUP del día; sin tasa los precios se muestran como "—". */
+  rate?: number | null;
 }) {
   const seed: Row[] =
     initialLines && initialLines.length > 0
-      ? initialLines.map((l, i) => ({
-          uid: i + 1, product_id: l.product_id, quantity: String(l.quantity), unit_price: String(l.unit_price),
-        }))
-      : [{ uid: 1, product_id: "", quantity: "1", unit_price: "0" }];
+      ? initialLines.map((l, i) => ({ uid: i + 1, product_id: l.product_id, quantity: String(l.quantity) }))
+      : [{ uid: 1, product_id: "", quantity: "1" }];
   const [rows, setRows] = useState<Row[]>(seed);
-  // Precio sugerido: el de CUP si existe (las ventas del gestor son en CUP);
-  // si no, cae al precio USD del catálogo online.
-  const priceMap = useMemo(() => new Map(products.map((p) => [p.id, p.price_cup ?? p.price])), [products]);
+
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  // Espejo de priceCupFromUsd (lib/currency.ts) — múltiplo de 5 hacia arriba.
+  const priceCup = (productId: string): number | null => {
+    const p = productById.get(productId);
+    if (!p || !rate || p.price <= 0) return null;
+    return Math.ceil((p.price * rate) / 5) * 5;
+  };
 
   const total = useMemo(
-    () => rows.reduce((s, r) => {
-      const q = Number(r.quantity); const c = Number(r.unit_price);
-      return s + (Number.isFinite(q) && Number.isFinite(c) ? q * c : 0);
-    }, 0),
-    [rows],
+    () =>
+      rows.reduce((s, r) => {
+        const q = Number(r.quantity);
+        const c = priceCup(r.product_id) ?? 0;
+        return s + (Number.isFinite(q) ? q * c : 0);
+      }, 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, rate, products],
   );
-
-  function onProductChange(uid: number, productId: string) {
-    setRows((cur) => cur.map((x) => {
-      if (x.uid !== uid) return x;
-      const suggested = priceMap.get(productId);
-      // Si no se ha tocado el precio (sigue en "0" o vacío), autorrellena con el del producto
-      const unit_price = (x.unit_price === "" || x.unit_price === "0") && suggested != null ? String(suggested) : x.unit_price;
-      return { ...x, product_id: productId, unit_price };
-    }));
-  }
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-medium">Líneas</div>
+        <div className="text-sm font-medium">
+          Líneas{" "}
+          <span className="font-normal text-muted-foreground">
+            (precio = USD × tasa{rate ? ` ${rate}` : ""}, redondeado a 5 CUP)
+          </span>
+        </div>
         <Button
           type="button" variant="outline" size="sm"
-          onClick={() => setRows((cur) => [...cur, { uid: Date.now(), product_id: "", quantity: "1", unit_price: "0" }])}
+          onClick={() => setRows((cur) => [...cur, { uid: Date.now(), product_id: "", quantity: "1" }])}
         >
           <Plus className="size-3.5" /> Agregar línea
         </Button>
       </div>
       <div className="space-y-2 overflow-x-auto">
         {rows.map((r, idx) => {
-          const q = Number(r.quantity); const c = Number(r.unit_price);
-          const sub = Number.isFinite(q) && Number.isFinite(c) ? q * c : 0;
+          const q = Number(r.quantity);
+          const unit = priceCup(r.product_id);
+          const sub = unit != null && Number.isFinite(q) ? q * unit : 0;
+          const p = productById.get(r.product_id);
           return (
-            <div key={r.uid} className="grid grid-cols-[1fr_90px_120px_110px_auto] gap-2 items-start min-w-[560px]">
-              <Select name="product_id" required value={r.product_id} onChange={(e) => onProductChange(r.uid, e.target.value)}>
+            <div key={r.uid} className="grid grid-cols-[1fr_90px_130px_110px_auto] gap-2 items-start min-w-[560px]">
+              <Select
+                name="product_id"
+                required
+                value={r.product_id}
+                onChange={(e) =>
+                  setRows((cur) => cur.map((x) => (x.uid === r.uid ? { ...x, product_id: e.target.value } : x)))
+                }
+              >
                 <option value="">— Producto —</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    [{p.store ?? "almacén"}] {p.name} — {p.price_cup != null ? `${formatPrice(p.price_cup)} CUP` : `${formatPrice(p.price)} USD`}
+                {products.map((pp) => (
+                  <option key={pp.id} value={pp.id}>
+                    [{pp.store ?? "almacén"}] {pp.name} — {pp.price > 0 ? `${formatPrice(pp.price)} USD` : "sin precio"}
                   </option>
                 ))}
               </Select>
@@ -78,12 +96,18 @@ export function OrderLineEditor({
                 onChange={(e) => setRows((cur) => cur.map((x) => (x.uid === r.uid ? { ...x, quantity: e.target.value } : x)))}
                 placeholder="Cant."
               />
-              <Input
-                type="number" step="0.01" min={0} name="unit_price" required
-                value={r.unit_price}
-                onChange={(e) => setRows((cur) => cur.map((x) => (x.uid === r.uid ? { ...x, unit_price: e.target.value } : x)))}
-                placeholder="Precio unit."
-              />
+              <div className="h-10 flex flex-col items-end justify-center rounded-md border bg-muted/40 px-3 font-mono text-sm">
+                {unit != null ? (
+                  <>
+                    <span>{unit} CUP</span>
+                    {p ? <span className="text-[10px] text-muted-foreground">{formatPrice(p.price)} USD</span> : null}
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">{r.product_id ? (rate ? "sin precio USD" : "sin tasa") : "—"}</span>
+                )}
+                {/* El precio viaja calculado; el servidor lo recalcula al confirmar. */}
+                <input type="hidden" name="unit_price" value={unit ?? 0} />
+              </div>
               <div className="h-10 flex items-center justify-end pr-1 text-sm font-mono text-muted-foreground">
                 {formatPrice(sub)}
               </div>
@@ -100,7 +124,7 @@ export function OrderLineEditor({
         })}
       </div>
       <div className="flex justify-end pt-2 pr-12 text-sm">
-        <div className="font-medium">Total: <span className="font-mono">{formatPrice(total)}</span></div>
+        <div className="font-medium">Total: <span className="font-mono">{formatPrice(total)} CUP</span></div>
       </div>
     </div>
   );

@@ -312,6 +312,8 @@ export type Database = {
           reference: string;
           notes: string;
           total_amount: number;
+          rate: number | null;
+          total_usd: number | null;
           created_by: string | null;
           received_by: string | null;
           received_at: string | null;
@@ -327,6 +329,8 @@ export type Database = {
           status?: PurchaseOrderStatus;
           reference?: string;
           notes?: string;
+          rate?: number | null;
+          total_usd?: number | null;
           created_by?: string | null;
         };
         Update: {
@@ -335,6 +339,8 @@ export type Database = {
           status?: PurchaseOrderStatus;
           reference?: string;
           notes?: string;
+          rate?: number | null;
+          total_usd?: number | null;
           received_by?: string | null;
           received_at?: string | null;
           movement_id?: string | null;
@@ -348,6 +354,7 @@ export type Database = {
           product_id: string;
           quantity: number;
           unit_cost: number;
+          unit_cost_usd: number | null;
           line_total: number;
           position: number;
         };
@@ -357,11 +364,13 @@ export type Database = {
           product_id: string;
           quantity: number;
           unit_cost?: number;
+          unit_cost_usd?: number | null;
           position?: number;
         };
         Update: {
           quantity?: number;
           unit_cost?: number;
+          unit_cost_usd?: number | null;
           position?: number;
         };
         Relationships: [];
@@ -415,6 +424,7 @@ export type Database = {
           amount_usd: number | null;
           sale_rate: number | null;
           cogs_total: number;
+          cogs_usd: number;
           created_at: string;
           updated_at: string;
         };
@@ -458,6 +468,7 @@ export type Database = {
           amount_usd?: number | null;
           sale_rate?: number | null;
           cogs_total?: number;
+          cogs_usd?: number;
         };
         Relationships: [];
       };
@@ -863,6 +874,7 @@ export type Database = {
           product_id: string;
           quantity: number;
           unit_price: number;
+          unit_price_usd: number | null;
           line_total: number;
           position: number;
         };
@@ -872,11 +884,13 @@ export type Database = {
           product_id: string;
           quantity: number;
           unit_price?: number;
+          unit_price_usd?: number | null;
           position?: number;
         };
         Update: {
           quantity?: number;
           unit_price?: number;
+          unit_price_usd?: number | null;
           position?: number;
         };
         Relationships: [];
@@ -1017,6 +1031,8 @@ export type Database = {
           id: string; code: string; entry_date: string;
           description: string; reference_type: string; reference_id: string | null;
           total_debit: number; total_credit: number;
+          exchange_rate: number | null;
+          total_debit_usd: number; total_credit_usd: number;
           status: JournalEntryStatus; business: string | null;
           created_by: string | null; posted_by: string | null; posted_at: string | null;
           created_at: string; updated_at: string;
@@ -1025,12 +1041,14 @@ export type Database = {
           id?: string; code?: string; entry_date?: string;
           description?: string; reference_type?: string; reference_id?: string | null;
           business?: string | null;
+          exchange_rate?: number | null;
           created_by?: string | null;
         };
         Update: {
           entry_date?: string; description?: string;
           reference_type?: string; reference_id?: string | null;
           status?: JournalEntryStatus;
+          exchange_rate?: number | null;
           posted_by?: string | null; posted_at?: string | null;
         };
         Relationships: [];
@@ -1038,14 +1056,19 @@ export type Database = {
       journal_lines: {
         Row: {
           id: string; entry_id: string; account_id: string;
-          debit: number; credit: number; description: string; position: number;
+          debit: number; credit: number;
+          debit_usd: number; credit_usd: number;
+          description: string; position: number;
         };
         Insert: {
           id?: string; entry_id: string; account_id: string;
-          debit?: number; credit?: number; description?: string; position?: number;
+          debit?: number; credit?: number;
+          debit_usd?: number; credit_usd?: number;
+          description?: string; position?: number;
         };
         Update: {
           account_id?: string; debit?: number; credit?: number;
+          debit_usd?: number; credit_usd?: number;
           description?: string; position?: number;
         };
         Relationships: [];
@@ -1126,6 +1149,7 @@ export type Database = {
           product_id: string;
           quantity: number;
           unit_cost: number | null;
+          unit_cost_usd: number | null;
         };
         Insert: {
           id?: string;
@@ -1133,6 +1157,7 @@ export type Database = {
           product_id: string;
           quantity: number;
           unit_cost?: number | null;
+          unit_cost_usd?: number | null;
         };
         Update: never;
         Relationships: [];
@@ -1143,6 +1168,8 @@ export type Database = {
           product_id: string;
           warehouse_id: string;
           unit_cost: number;
+          unit_cost_usd: number;
+          rate: number | null;
           qty_received: number;
           qty_remaining: number;
           source_type: string;
@@ -1156,6 +1183,8 @@ export type Database = {
           product_id: string;
           warehouse_id: string;
           unit_cost?: number;
+          unit_cost_usd?: number;
+          rate?: number | null;
           qty_received: number;
           qty_remaining: number;
           source_type?: string;
@@ -1163,7 +1192,7 @@ export type Database = {
           movement_id?: string | null;
           received_at?: string;
         };
-        Update: { unit_cost?: number; qty_remaining?: number };
+        Update: { unit_cost?: number; unit_cost_usd?: number; rate?: number | null; qty_remaining?: number };
         Relationships: [];
       };
       inventory_lot_consumptions: {
@@ -1175,6 +1204,7 @@ export type Database = {
           warehouse_id: string;
           quantity: number;
           unit_cost: number;
+          unit_cost_usd: number;
           created_at: string;
         };
         Insert: {
@@ -1185,6 +1215,7 @@ export type Database = {
           warehouse_id: string;
           quantity: number;
           unit_cost: number;
+          unit_cost_usd?: number;
         };
         Update: never;
         Relationships: [];

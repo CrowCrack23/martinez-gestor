@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Flash } from "@/components/flash";
-import { cupToUsd, formatUsd } from "@/lib/currency";
+import { RateBanner } from "@/components/rate-banner";
+import { formatUsd } from "@/lib/currency";
 import { addFixedAssetAction, recordCashMovementAction } from "./actions";
 
 type SP = Promise<{ business?: string; error?: string; success?: string }>;
@@ -49,44 +50,37 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
         <Button type="submit" variant="outline" size="sm">Ver</Button>
       </form>
 
-      {snapshot.usdRate == null && (
-        <div className="rounded-md border border-warning/30 bg-warning/10 text-sm px-3 py-2">
-          No hay tasa USD→CUP registrada: la caja USD no entra en los totales y no se muestran
-          equivalentes en dólares. Registra una tasa en <span className="font-mono">/remesas/tasas</span>.
-        </div>
-      )}
+      <RateBanner />
 
-      {/* Totales (el dólar es la moneda rectora) */}
+      {/* Totales — el dólar es la moneda rectora; cifras USD congeladas por operación */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Capital total (USD)</div>
-            <div className="text-2xl font-semibold">{formatUsd(cupToUsd(snapshot.capitalTotal, snapshot.usdRate))}</div>
-            {snapshot.usdRate != null && (
-              <div className="text-xs text-muted-foreground">Tasa {snapshot.usdRate} CUP/USD</div>
-            )}
+            <div className="text-2xl font-semibold">{formatUsd(snapshot.capitalTotalUsd)}</div>
+            <div className="text-xs text-muted-foreground">USD real, congelado por operación</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-sm text-muted-foreground">Capital total</div>
+            <div className="text-sm text-muted-foreground">Capital total (CUP)</div>
             <div className="text-2xl font-semibold">{fmt(snapshot.capitalTotal)} CUP</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Dinero en movimiento</div>
-            <div className="text-2xl font-semibold">{fmt(snapshot.moving)} CUP</div>
+            <div className="text-2xl font-semibold">{formatUsd(snapshot.movingUsd)}</div>
             <div className="text-xs text-muted-foreground">
-              Efectivo + inventario + CxC − CxP · ≈ {formatUsd(cupToUsd(snapshot.moving, snapshot.usdRate))}
+              Efectivo + inventario + CxC − CxP · {fmt(snapshot.moving)} CUP
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Infraestructura (fija)</div>
-            <div className="text-2xl font-semibold">{fmt(snapshot.infrastructure)} CUP</div>
-            <div className="text-xs text-muted-foreground">{assets.length} inversión(es) registrada(s)</div>
+            <div className="text-2xl font-semibold">{formatUsd(snapshot.infrastructureUsd)}</div>
+            <div className="text-xs text-muted-foreground">{fmt(snapshot.infrastructure)} CUP · {assets.length} inversión(es)</div>
           </CardContent>
         </Card>
       </div>
@@ -99,7 +93,6 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
             <div className="text-xl font-semibold">{fmt(snapshot.contributed.total)} CUP</div>
             <div className="text-xs text-muted-foreground">
               Aportes: {fmt(snapshot.contributed.cup)} CUP + {fmt(snapshot.contributed.usd)} USD
-              {" "}· ≈ {formatUsd(cupToUsd(snapshot.contributed.total, snapshot.usdRate))}
             </div>
           </div>
           <Button asChild variant="outline" size="sm"><Link href="/socios/aportes">Ver aportes</Link></Button>
@@ -111,22 +104,23 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Efectivo</div>
-            <div className="text-xl font-semibold">{fmt(snapshot.cash.total)} CUP</div>
+            <div className="text-xl font-semibold">{formatUsd(snapshot.cash.totalUsd)}</div>
             <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
-              <div>Caja CUP: {fmt(snapshot.cash.cup)}</div>
+              <div>Caja CUP: {fmt(snapshot.cash.cup)} CUP</div>
               <div>
                 Caja USD: {fmt(snapshot.cash.usd)} USD
-                {snapshot.cash.usdCup != null ? ` (≈ ${fmt(snapshot.cash.usdCup)} CUP)` : " (sin tasa)"}
+                {snapshot.cash.usdCup != null ? ` (≈ ${fmt(snapshot.cash.usdCup)} CUP hoy)` : ""}
               </div>
-              <div>Banco: {fmt(snapshot.cash.bank)}</div>
+              <div>Banco: {fmt(snapshot.cash.bank)} CUP</div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Inventario (FIFO)</div>
-            <div className="text-xl font-semibold">{fmt(snapshot.inventory.total)} CUP</div>
+            <div className="text-xl font-semibold">{formatUsd(snapshot.inventory.totalUsd)}</div>
             <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
+              <div>Total: {fmt(snapshot.inventory.total)} CUP</div>
               <div>Insumos / elaboración: {fmt(snapshot.inventory.centro)}</div>
               <div>Almacén central: {fmt(snapshot.inventory.almacen)}</div>
               <div>En puntos de venta: {fmt(snapshot.inventory.puntos)}</div>
@@ -136,13 +130,15 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Cuentas por cobrar</div>
-            <div className="text-xl font-semibold">{fmt(snapshot.receivables)} CUP</div>
+            <div className="text-xl font-semibold">{formatUsd(snapshot.receivablesUsd)}</div>
+            <div className="text-xs text-muted-foreground">{fmt(snapshot.receivables)} CUP</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Cuentas por pagar</div>
-            <div className="text-xl font-semibold text-destructive">−{fmt(snapshot.payables)} CUP</div>
+            <div className="text-xl font-semibold text-destructive">−{formatUsd(snapshot.payablesUsd)}</div>
+            <div className="text-xs text-muted-foreground">−{fmt(snapshot.payables)} CUP</div>
           </CardContent>
         </Card>
       </div>
@@ -155,14 +151,16 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
               <thead className="text-left text-muted-foreground border-b">
                 <tr>
                   <th className="px-4 py-3 font-medium">Almacén / punto</th>
-                  <th className="px-4 py-3 font-medium text-right">Valor del inventario</th>
+                  <th className="px-4 py-3 font-medium text-right">Valor USD</th>
+                  <th className="px-4 py-3 font-medium text-right">Valor CUP</th>
                 </tr>
               </thead>
               <tbody>
                 {snapshot.inventory.byWarehouse.map((w) => (
                   <tr key={w.warehouse_id} className="border-b last:border-b-0">
                     <td className="px-4 py-3">{w.name}</td>
-                    <td className="px-4 py-3 text-right font-mono">{fmt(w.value)}</td>
+                    <td className="px-4 py-3 text-right font-mono font-medium">{formatUsd(w.valueUsd)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-muted-foreground">{fmt(w.value)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -13,6 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
 import { PurchaseLineEditor } from "@/components/purchase-line-editor";
+import { RateBanner } from "@/components/rate-banner";
+import { getCurrentRate } from "@/lib/currency";
 import { formatDateTime, formatPrice } from "@/lib/format";
 import {
   cancelPurchaseOrderAction,
@@ -67,8 +69,9 @@ export default async function CompraDetallePage({ params, searchParams }: { para
               <tr>
                 <th className="px-4 py-3 font-medium">Producto</th>
                 <th className="px-4 py-3 font-medium text-right">Cant.</th>
-                <th className="px-4 py-3 font-medium text-right">Costo unit.</th>
-                <th className="px-4 py-3 font-medium text-right">Subtotal</th>
+                <th className="px-4 py-3 font-medium text-right">Costo USD</th>
+                <th className="px-4 py-3 font-medium text-right">Costo CUP</th>
+                <th className="px-4 py-3 font-medium text-right">Subtotal CUP</th>
               </tr>
             </thead>
             <tbody>
@@ -76,6 +79,7 @@ export default async function CompraDetallePage({ params, searchParams }: { para
                 <tr key={l.id} className="border-b last:border-b-0">
                   <td className="px-4 py-3">{l.product_name}</td>
                   <td className="px-4 py-3 text-right font-mono">{l.quantity}</td>
+                  <td className="px-4 py-3 text-right font-mono">{l.unit_cost_usd != null ? `${l.unit_cost_usd.toFixed(2)} USD` : "—"}</td>
                   <td className="px-4 py-3 text-right font-mono">{formatPrice(l.unit_cost)}</td>
                   <td className="px-4 py-3 text-right font-mono">{formatPrice(l.line_total)}</td>
                 </tr>
@@ -84,6 +88,9 @@ export default async function CompraDetallePage({ params, searchParams }: { para
             <tfoot>
               <tr className="font-medium">
                 <td colSpan={3} className="px-4 py-3 text-right">Total</td>
+                <td className="px-4 py-3 text-right font-mono text-muted-foreground">
+                  {po.total_usd != null ? `${po.total_usd.toFixed(2)} USD` : ""}
+                </td>
                 <td className="px-4 py-3 text-right font-mono">{formatPrice(po.total_amount)}</td>
               </tr>
             </tfoot>
@@ -105,10 +112,11 @@ export default async function CompraDetallePage({ params, searchParams }: { para
   }
 
   // Editable (borrador)
-  const [suppliers, warehouses, products] = await Promise.all([
+  const [suppliers, warehouses, products, rate] = await Promise.all([
     listSuppliers(),
     listWarehouses(scope),
     listProductsLite(scope),
+    getCurrentRate(),
   ]);
   const activeSuppliers = suppliers.filter((s) => s.active || s.id === po.supplier_id);
   const activeWarehouses = warehouses.filter((w) => w.active || w.id === po.warehouse_id);
@@ -116,6 +124,7 @@ export default async function CompraDetallePage({ params, searchParams }: { para
   return (
     <div className="max-w-3xl space-y-6">
       <Header po={po} />
+      <RateBanner />
       <Flash success={sp.success} error={sp.error} />
 
       <Card>
@@ -141,7 +150,8 @@ export default async function CompraDetallePage({ params, searchParams }: { para
             </div>
             <PurchaseLineEditor
               products={products}
-              initialLines={po.lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity, unit_cost: l.unit_cost }))}
+              rate={rate && !rate.stale ? rate.rate : null}
+              initialLines={po.lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity, unit_cost_usd: l.unit_cost_usd }))}
             />
             <div className="space-y-2">
               <Label htmlFor="notes">Notas</Label>

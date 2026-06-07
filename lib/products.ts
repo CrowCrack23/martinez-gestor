@@ -17,10 +17,13 @@ export type ProductRow = {
   id: string;
   name: string;
   description: string;
-  /** Precio USD del catálogo online (tabla products, martinez-global). */
+  /**
+   * Precio USD: ÚNICO punto de verdad de venta (moneda funcional). El precio
+   * CUP ya no se guarda: se calcula al vuelo como price × tasa del día
+   * (priceCupFromUsd, lib/currency.ts) en el gestor y en la APK.
+   */
   price: number;
-  /** Precios del gestor por moneda (tabla product_prices, migración 0036). */
-  price_cup: number | null;
+  /** Precio EUR opcional para la tienda online (tabla product_prices). */
   price_eur: number | null;
   old_price: number | null;
   image: string;
@@ -55,11 +58,10 @@ export const listCatalog = unstable_cache(
     if (filter?.scope) q = q.or(`store.in.(${filter.scope.join(",")}),store.is.null`);
     const { data, error } = await q;
     if (error) throw error;
-    type R = Omit<ProductRow, "price_cup" | "price_eur"> & { product_prices: PriceRow[] | null };
+    type R = Omit<ProductRow, "price_eur"> & { product_prices: PriceRow[] | null };
     return ((data ?? []) as unknown as R[]).map(({ product_prices, ...p }) => ({
       ...p,
       price: Number(p.price),
-      price_cup: pickPrice(product_prices, "CUP"),
       price_eur: pickPrice(product_prices, "EUR"),
       old_price: p.old_price != null ? Number(p.old_price) : null,
     }));
@@ -77,12 +79,11 @@ export async function getCatalogProduct(id: string): Promise<ProductRow | null> 
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  type R = Omit<ProductRow, "price_cup" | "price_eur"> & { product_prices: PriceRow[] | null };
+  type R = Omit<ProductRow, "price_eur"> & { product_prices: PriceRow[] | null };
   const { product_prices, ...p } = data as unknown as R;
   return {
     ...p,
     price: Number(p.price),
-    price_cup: pickPrice(product_prices, "CUP"),
     price_eur: pickPrice(product_prices, "EUR"),
     old_price: p.old_price != null ? Number(p.old_price) : null,
   };
@@ -91,8 +92,8 @@ export async function getCatalogProduct(id: string): Promise<ProductRow | null> 
 export type ProductInput = {
   name: string;
   description: string;
+  /** Precio de venta en USD (único punto de verdad; el CUP se calcula con la tasa). */
   price: number;
-  price_cup: number | null;
   price_eur: number | null;
   old_price: number | null;
   image: string;
@@ -105,11 +106,15 @@ export type ProductInput = {
   online_visible: boolean;
 };
 
-/** Sincroniza los precios por moneda del gestor (upsert o borrado si null). */
+/**
+ * Sincroniza los precios por moneda del gestor (upsert o borrado si null).
+ * Solo EUR (online): el CUP ya no se persiste — se calcula con la tasa del día.
+ */
 async function syncProductPrices(productId: string, input: ProductInput): Promise<void> {
   const sb = getSupabase();
   const entries: { currency: "CUP" | "EUR"; price: number | null }[] = [
-    { currency: "CUP", price: input.price_cup },
+    // Limpia cualquier CUP manual heredado para que nadie lo siga leyendo.
+    { currency: "CUP", price: null },
     { currency: "EUR", price: input.price_eur },
   ];
   for (const e of entries) {

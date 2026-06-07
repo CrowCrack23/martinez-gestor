@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
 import { OrderLineEditor } from "@/components/order-line-editor";
+import { getCurrentRate } from "@/lib/currency";
 import { formatDateTime, formatPrice } from "@/lib/format";
 import {
   cancelOrderAction, confirmOrderAction, deleteOrderAction, updateOrderAction,
@@ -113,8 +114,8 @@ export default async function VentaDetallePage({ params, searchParams }: { param
   }
 
   // Editable (borrador)
-  const [customers, warehouses, products] = await Promise.all([
-    listCustomers(), listWarehouses(scope), listProductsLite(scope),
+  const [customers, warehouses, products, rate] = await Promise.all([
+    listCustomers(), listWarehouses(scope), listProductsLite(scope), getCurrentRate(),
   ]);
   const activeCustomers = customers.filter((c) => c.active || c.id === o.customer_id);
   const activeWarehouses = warehouses.filter((w) => w.active || w.id === o.warehouse_id);
@@ -167,7 +168,8 @@ export default async function VentaDetallePage({ params, searchParams }: { param
             </div>
             <OrderLineEditor
               products={products}
-              initialLines={o.lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity, unit_price: l.unit_price }))}
+              rate={rate && !rate.stale ? rate.rate : null}
+              initialLines={o.lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity }))}
             />
             <div className="space-y-2">
               <Label htmlFor="notes">Notas</Label>

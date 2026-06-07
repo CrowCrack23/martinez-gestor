@@ -3,10 +3,12 @@ import { unstable_cache } from "next/cache";
 import { getSupabase } from "./supabase";
 import type { DeliveryCurrency } from "./supabase-types";
 
-// Doble moneda con el dólar como moneda rectora: el libro contable sigue
-// denominado en CUP (salvo cuentas con currency USD/EUR, p. ej. 1120 Caja
-// USD, que guardan números en su moneda nativa). Estos helpers convierten
-// con la última tasa registrada en exchange_rates (/remesas/tasas).
+// USD como moneda funcional (moneda rectora): cada transacción congela su
+// monto USD a la tasa del día en que ocurre (ver migración 0040). Estos
+// helpers dan la tasa del día y la regla de frescura: la tasa se registra a
+// mano cada día en /remesas/tasas; con más de RATE_STALE_DAYS días las
+// operaciones de compra/venta se bloquean (espejo de current_usd_rate_strict
+// en SQL, migración 0041).
 //
 // Consulta exchange_rates directo (no importa lib/remittances.ts) para no
 // crear ciclos de import; reutiliza el tag "exchange_rates" que ya invalida
@@ -15,6 +17,70 @@ import type { DeliveryCurrency } from "./supabase-types";
 export type Currency = DeliveryCurrency;
 
 export type Rates = { USD: number | null; EUR: number | null };
+
+/** Días de antigüedad máxima de la tasa antes de bloquear operaciones. */
+export const RATE_STALE_DAYS = 3;
+
+export type CurrentRate = {
+  rate: number;
+  /** Día de la tasa (YYYY-MM-DD). */
+  day: string;
+  /** Días transcurridos desde la tasa. */
+  ageDays: number;
+  /** true si supera RATE_STALE_DAYS → operaciones bloqueadas. */
+  stale: boolean;
+};
+
+/** Última tasa USD→CUP con su fecha y frescura, o null si nunca se registró. */
+export const getCurrentRate = unstable_cache(
+  async (): Promise<CurrentRate | null> => {
+    const sb = getSupabase();
+    const { data, error } = await sb
+      .from("exchange_rates")
+      .select("rate, day")
+      .eq("currency_from", "USD")
+      .eq("currency_to", "CUP")
+      .order("day", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    const ageDays = Math.floor((Date.now() - new Date(`${data.day}T00:00:00`).getTime()) / 86_400_000);
+    return { rate: Number(data.rate), day: data.day, ageDays, stale: ageDays > RATE_STALE_DAYS };
+  },
+  ["currency_current_rate"],
+  { revalidate: 60, tags: ["exchange_rates"] },
+);
+
+/**
+ * Tasa USD→CUP del día, o error si falta o está vieja (espejo TS de
+ * current_usd_rate_strict). Usar en toda operación que congele montos USD.
+ */
+export async function assertFreshRate(): Promise<number> {
+  const current = await getCurrentRate();
+  if (!current) {
+    throw new Error("No hay tasa USD→CUP registrada. Registra la tasa del día en /remesas/tasas.");
+  }
+  if (current.stale) {
+    throw new Error(
+      `La última tasa USD→CUP es del ${current.day} (más de ${RATE_STALE_DAYS} días). Registra la tasa del día en /remesas/tasas.`,
+    );
+  }
+  return current.rate;
+}
+
+/**
+ * Precio de venta en CUP desde el precio USD: múltiplo de 5 hacia arriba.
+ * Espejo TS de product_price_cup (migración 0041).
+ */
+export function priceCupFromUsd(usd: number, rate: number): number {
+  return Math.ceil((usd * rate) / 5) * 5;
+}
+
+/** Equivalente USD congelando la tasa dada (redondeo a centavos). */
+export function usdAt(amountCup: number, rate: number): number {
+  return Math.round((amountCup / rate) * 100) / 100;
+}
 
 /** Última tasa registrada from→to, o null si nunca se registró una. */
 export const getRate = unstable_cache(

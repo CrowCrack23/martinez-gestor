@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
 import { PurchaseLineEditor } from "@/components/purchase-line-editor";
+import { RateBanner } from "@/components/rate-banner";
+import { getCurrentRate } from "@/lib/currency";
 import { createPurchaseOrderAction } from "../actions";
 
 type SP = Promise<{ error?: string }>;
@@ -18,10 +20,11 @@ type SP = Promise<{ error?: string }>;
 export default async function NuevaCompraPage({ searchParams }: { searchParams: SP }) {
   const user = await requireRole(["admin", "almacenero"]);
   const scope = businessScope(user);
-  const [suppliers, warehouses, products, sp] = await Promise.all([
+  const [suppliers, warehouses, products, rate, sp] = await Promise.all([
     listSuppliers(),
     listWarehouses(scope),
     listProductsLite(scope),
+    getCurrentRate(),
     searchParams,
   ]);
   const activeSuppliers = suppliers.filter((s) => s.active);
@@ -31,8 +34,9 @@ export default async function NuevaCompraPage({ searchParams }: { searchParams: 
     <div className="max-w-3xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Nueva orden de compra</h1>
-        <p className="text-sm text-muted-foreground">Se crea en estado borrador. Al recibirla, se generará un movimiento de entrada automático.</p>
+        <p className="text-sm text-muted-foreground">Los costos se registran en USD; el equivalente CUP queda congelado a la tasa del día. Se crea en estado borrador.</p>
       </div>
+      <RateBanner />
       <Flash error={sp.error} />
       {(activeSuppliers.length === 0 || activeWarehouses.length === 0) && (
         <div className="rounded-md border border-warning/30 bg-warning/10 text-sm px-3 py-2">
@@ -63,7 +67,7 @@ export default async function NuevaCompraPage({ searchParams }: { searchParams: 
               <Label htmlFor="reference">Nº factura del proveedor</Label>
               <Input id="reference" name="reference" />
             </div>
-            <PurchaseLineEditor products={products} />
+            <PurchaseLineEditor products={products} rate={rate && !rate.stale ? rate.rate : null} />
             <div className="space-y-2">
               <Label htmlFor="notes">Notas</Label>
               <Textarea id="notes" name="notes" rows={2} />

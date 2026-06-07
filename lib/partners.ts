@@ -2,6 +2,7 @@ import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { createJournalEntry } from "./accounting";
+import { assertFreshRate } from "./currency";
 import type { Database } from "./supabase-types";
 
 // Socios por negocio (migración 0029) y aportes de capital (0030).
@@ -182,16 +183,22 @@ export async function addContribution(input: {
     if (!caja || !capital) throw new Error("Faltan cuentas 1110/1120/3100 en el plan de cuentas.");
     const { data: partner } = await sb.from("business_partners").select("name").eq("id", input.partner_id).maybeSingle();
     const who = partner?.name ?? "socio";
+    // Asiento dual (USD funcional): la tasa del día congela el otro lado.
+    const rate = await assertFreshRate();
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const amountCup = input.currency === "USD" ? r2(input.amount * rate) : input.amount;
+    const amountUsd = input.currency === "USD" ? input.amount : r2(input.amount / rate);
     const entryId = await createJournalEntry({
       entry_date: input.contributed_at,
       description: `Aporte de capital — ${who}`,
       reference_type: "aporte_capital",
       reference_id: data.id,
       business: input.business_slug,
+      exchange_rate: rate,
       created_by: input.created_by,
       lines: [
-        { account_id: caja, debit: input.amount, credit: 0, description: `Aporte ${input.currency}` },
-        { account_id: capital, debit: 0, credit: input.amount, description: `Capital social — ${who}` },
+        { account_id: caja, debit: amountCup, credit: 0, debit_usd: amountUsd, credit_usd: 0, description: `Aporte ${input.currency}` },
+        { account_id: capital, debit: 0, credit: amountCup, debit_usd: 0, credit_usd: amountUsd, description: `Capital social — ${who}` },
       ],
     });
     await sb.from("capital_contributions").update({ journal_entry_id: entryId }).eq("id", data.id);

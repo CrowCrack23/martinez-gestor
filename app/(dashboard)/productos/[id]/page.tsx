@@ -4,6 +4,7 @@ import { hasRole, requirePermission } from "@/lib/auth";
 import { getCatalogProduct } from "@/lib/products";
 import { listStoresLite } from "@/lib/stores-lite";
 import { listCategoriesLite } from "@/lib/categories-lite";
+import { getCurrentRate } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
@@ -17,11 +18,12 @@ export default async function ProductoDetallePage({ params, searchParams }: { pa
   const user = await requirePermission("productos");
   const canDelete = hasRole(user, ["admin"]);
   const { id } = await params;
-  const [p, sp, stores, categories] = await Promise.all([
+  const [p, sp, stores, categories, rate] = await Promise.all([
     getCatalogProduct(id),
     searchParams,
     listStoresLite(),
     listCategoriesLite(),
+    getCurrentRate(),
   ]);
   if (!p) notFound();
 
@@ -37,7 +39,7 @@ export default async function ProductoDetallePage({ params, searchParams }: { pa
       <Flash success={sp.success} error={sp.error} />
       <Card>
         <CardContent className="pt-6">
-          <ProductForm action={update} stores={stores} categories={categories} initial={p} submitLabel="Guardar cambios" />
+          <ProductForm action={update} stores={stores} categories={categories} initial={p} submitLabel="Guardar cambios" rate={rate && !rate.stale ? rate.rate : null} />
         </CardContent>
       </Card>
       {canDelete && (

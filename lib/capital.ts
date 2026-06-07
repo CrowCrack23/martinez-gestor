@@ -4,7 +4,7 @@ import { getSupabase } from "./supabase";
 import { createJournalEntry, trialBalance } from "./accounting";
 import { stockValuation } from "./costing";
 import { listWarehouses } from "./warehouses";
-import { getRate } from "./currency";
+import { getRate, assertFreshRate } from "./currency";
 import { listContributions } from "./partners";
 import type { Database, WarehouseType } from "./supabase-types";
 
@@ -36,23 +36,41 @@ const ACC_OTROS_GASTOS = "5400";
 export type CapitalSnapshot = {
   /** Última tasa USD→CUP registrada (null si no hay; los equivalentes quedan null). */
   usdRate: number | null;
-  // usd está en USD nativo; usdCup es su equivalente CUP (null sin tasa).
-  // total está en CUP (la caja USD entra convertida; 0 si no hay tasa).
-  cash: { cup: number; usd: number; usdCup: number | null; bank: number; total: number };
-  /** Capital aportado por los socios (saldo 3100 + desglose por moneda de los aportes). */
+  // Las cifras *Usd salen del libro dual: USD CONGELADO por transacción
+  // (moneda funcional), no conversión a tasa de hoy.
+  cash: {
+    cup: number;
+    /** Saldo real en dólares de la Caja USD (balance_usd congelado del libro). */
+    usd: number;
+    /** Equivalente CUP del saldo USD a la última tasa (referencia, null sin tasa). */
+    usdCup: number | null;
+    bank: number;
+    total: number;
+    /** Efectivo total en USD congelado (1110 + 1120 + 1130). */
+    totalUsd: number;
+  };
+  /** Capital aportado por los socios (desglose por moneda de los aportes). */
   contributed: { cup: number; usd: number; total: number };
   inventory: {
     centro: number; // insumos / en elaboración (centro_elaboracion)
     almacen: number; // producto terminado (almacen_central)
     puntos: number; // mercancía en puntos de venta / tiendas
     total: number;
-    byWarehouse: { warehouse_id: string; name: string; type: WarehouseType; value: number }[];
+    /** Valor del inventario en USD congelado (costos USD de los lotes FIFO). */
+    totalUsd: number;
+    byWarehouse: { warehouse_id: string; name: string; type: WarehouseType; value: number; valueUsd: number }[];
   };
   receivables: number;
+  receivablesUsd: number;
   payables: number;
+  payablesUsd: number;
   infrastructure: number;
+  /** Infraestructura en USD: congelado del libro (asientos de activo_fijo). */
+  infrastructureUsd: number;
   moving: number; // dinero en movimiento = cash + inventory + CxC − CxP
+  movingUsd: number;
   capitalTotal: number; // moving + infrastructure
+  capitalTotalUsd: number;
 };
 
 /** Etapa del capital según el tipo de almacén. */
@@ -73,12 +91,18 @@ export async function capitalSnapshot(business: string): Promise<CapitalSnapshot
   ]);
 
   const byCode = new Map(balance.map((r) => [r.account_code, r.balance]));
+  const byCodeUsd = new Map(balance.map((r) => [r.account_code, r.balance_usd]));
   const cup = byCode.get(ACC_CAJA_CUP) ?? 0;
-  const usd = byCode.get(ACC_CAJA_USD) ?? 0; // saldo nativo en USD
+  const usd = byCodeUsd.get(ACC_CAJA_USD) ?? 0; // saldo real en dólares (congelado)
   const usdCup = usdRate != null && usdRate > 0 ? Math.round(usd * usdRate * 100) / 100 : null;
   const bank = byCode.get(ACC_BANCO) ?? 0;
+  const cashTotalUsd =
+    Math.round(((byCodeUsd.get(ACC_CAJA_CUP) ?? 0) + usd + (byCodeUsd.get(ACC_BANCO) ?? 0)) * 100) / 100;
   const receivables = byCode.get(ACC_CXC) ?? 0;
+  const receivablesUsd = byCodeUsd.get(ACC_CXC) ?? 0;
   const payables = byCode.get(ACC_CXP) ?? 0;
+  const payablesUsd = byCodeUsd.get(ACC_CXP) ?? 0;
+  const infrastructureUsd = byCodeUsd.get(ACC_INFRA) ?? 0;
 
   // Capital aportado por socios, por moneda de aporte (fuente: capital_contributions).
   const contributed = { cup: 0, usd: 0, total: 0 };
@@ -88,35 +112,52 @@ export async function capitalSnapshot(business: string): Promise<CapitalSnapshot
   }
   contributed.total = contributed.cup + (usdRate != null ? Math.round(contributed.usd * usdRate * 100) / 100 : 0);
 
-  // Inventario FIFO del negocio, agregado por almacén y por etapa.
-  const valueByWarehouse = new Map<string, number>();
+  // Inventario FIFO del negocio (dual), agregado por almacén y por etapa.
+  const valueByWarehouse = new Map<string, { cup: number; usd: number }>();
   for (const [key, v] of Object.entries(valuation)) {
     const warehouseId = key.split("::")[1];
-    valueByWarehouse.set(warehouseId, (valueByWarehouse.get(warehouseId) ?? 0) + v.value);
+    const cur = valueByWarehouse.get(warehouseId) ?? { cup: 0, usd: 0 };
+    cur.cup += v.value;
+    cur.usd += v.value_usd;
+    valueByWarehouse.set(warehouseId, cur);
   }
   const inv = { centro: 0, almacen: 0, puntos: 0 };
+  let inventoryTotalUsd = 0;
   const byWarehouse: CapitalSnapshot["inventory"]["byWarehouse"] = [];
   for (const w of warehouses) {
-    const value = Math.round((valueByWarehouse.get(w.id) ?? 0) * 100) / 100;
-    if (value !== 0) byWarehouse.push({ warehouse_id: w.id, name: w.name, type: w.type, value });
+    const v = valueByWarehouse.get(w.id) ?? { cup: 0, usd: 0 };
+    const value = Math.round(v.cup * 100) / 100;
+    const valueUsd = Math.round(v.usd * 100) / 100;
+    if (value !== 0 || valueUsd !== 0) {
+      byWarehouse.push({ warehouse_id: w.id, name: w.name, type: w.type, value, valueUsd });
+    }
     inv[stageOf(w.type)] += value;
+    inventoryTotalUsd += valueUsd;
   }
   const inventoryTotal = inv.centro + inv.almacen + inv.puntos;
+  inventoryTotalUsd = Math.round(inventoryTotalUsd * 100) / 100;
 
   // Total de efectivo en CUP: la caja USD entra convertida con la última tasa
   // (si no hay tasa, no entra al total — la UI avisa).
   const cashTotal = cup + (usdCup ?? 0) + bank;
   const moving = cashTotal + inventoryTotal + receivables - payables;
+  const movingUsd =
+    Math.round((cashTotalUsd + inventoryTotalUsd + receivablesUsd - payablesUsd) * 100) / 100;
   return {
     usdRate,
-    cash: { cup, usd, usdCup, bank, total: cashTotal },
+    cash: { cup, usd, usdCup, bank, total: cashTotal, totalUsd: cashTotalUsd },
     contributed,
-    inventory: { ...inv, total: inventoryTotal, byWarehouse },
+    inventory: { ...inv, total: inventoryTotal, totalUsd: inventoryTotalUsd, byWarehouse },
     receivables,
+    receivablesUsd,
     payables,
+    payablesUsd,
     infrastructure,
+    infrastructureUsd,
     moving,
+    movingUsd,
     capitalTotal: moving + infrastructure,
+    capitalTotalUsd: Math.round((movingUsd + infrastructureUsd) * 100) / 100,
   };
 }
 
@@ -178,12 +219,14 @@ export async function addFixedAsset(input: {
     const infra = byCode.get(ACC_INFRA);
     const caja = byCode.get(ACC_CAJA_CUP);
     if (!infra || !caja) throw new Error("Faltan cuentas 1500/1110 en el plan de cuentas (aplicar migración 0031).");
+    const rate = await assertFreshRate();
     const entryId = await createJournalEntry({
       entry_date: input.acquired_at,
       description: `Infraestructura — ${input.name}`,
       reference_type: "activo_fijo",
       reference_id: data.id,
       business: input.business_slug,
+      exchange_rate: rate,
       created_by: input.created_by,
       lines: [
         { account_id: infra, debit: input.amount, credit: 0, description: input.name },
@@ -208,7 +251,8 @@ export async function addFixedAsset(input: {
  *  - ingreso: Caja (1110 CUP | 1120 USD) DEBE / Otros ingresos (4900) HABER
  *  - gasto:   Otros gastos (5400) DEBE / Caja (1110 | 1120) HABER
  *
- * El monto va en la moneda de la caja elegida (la 1120 se lleva en USD).
+ * El monto se captura en la moneda de la caja elegida y el asiento queda DUAL:
+ * la tasa del día congela el otro lado (USD funcional, migración 0040).
  */
 export async function recordCashMovement(input: {
   business_slug: string;
@@ -237,6 +281,12 @@ export async function recordCashMovement(input: {
     throw new Error(`Faltan cuentas ${cajaCode}/${otherCode} en el plan de cuentas (aplicar migración 0037).`);
   }
 
+  // Montos duales congelados a la tasa del día (bloquea si está vieja).
+  const rate = await assertFreshRate();
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const amountCup = input.currency === "USD" ? round2(input.amount * rate) : input.amount;
+  const amountUsd = input.currency === "USD" ? input.amount : round2(input.amount / rate);
+
   const cajaLine = { account_id: caja, description: `Caja ${input.currency}` };
   const otherLine = { account_id: other, description: input.concept };
   await createJournalEntry({
@@ -245,16 +295,17 @@ export async function recordCashMovement(input: {
     reference_type: "mov_caja",
     reference_id: crypto.randomUUID(),
     business: input.business_slug,
+    exchange_rate: rate,
     created_by: input.created_by,
     lines:
       input.kind === "ingreso"
         ? [
-            { ...cajaLine, debit: input.amount, credit: 0 },
-            { ...otherLine, debit: 0, credit: input.amount },
+            { ...cajaLine, debit: amountCup, credit: 0, debit_usd: amountUsd, credit_usd: 0 },
+            { ...otherLine, debit: 0, credit: amountCup, debit_usd: 0, credit_usd: amountUsd },
           ]
         : [
-            { ...otherLine, debit: input.amount, credit: 0 },
-            { ...cajaLine, debit: 0, credit: input.amount },
+            { ...otherLine, debit: amountCup, credit: 0, debit_usd: amountUsd, credit_usd: 0 },
+            { ...cajaLine, debit: 0, credit: amountCup, debit_usd: 0, credit_usd: amountUsd },
           ],
   });
   bust();

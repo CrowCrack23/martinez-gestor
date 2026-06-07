@@ -7,6 +7,7 @@ import {
   replaceJournalLines, updateJournalEntryHeader,
   type JournalLineInput,
 } from "@/lib/accounting";
+import { getCurrentRate } from "@/lib/currency";
 import type { AccountType } from "@/lib/supabase-types";
 import { optionalString, requireString, ValidationError } from "@/lib/validation";
 
@@ -76,12 +77,15 @@ function parseLines(form: FormData): JournalLineInput[] {
 export async function createJournalEntryAction(formData: FormData) {
   const user = await requireRole(["admin", "contador"]);
   try {
+    // El asiento manual se captura en CUP; el USD se congela con la tasa del día.
+    const rate = (await getCurrentRate())?.rate ?? null;
     const id = await createJournalEntry({
       entry_date: requireString(formData, "entry_date", "Fecha"),
       description: optionalString(formData, "description"),
       reference_type: optionalString(formData, "reference_type") || "manual",
       reference_id: optionalString(formData, "reference_id") || null,
       business: optionalString(formData, "business") || null,
+      exchange_rate: rate,
       created_by: user.id,
       lines: parseLines(formData),
     });
@@ -99,7 +103,7 @@ export async function updateJournalEntryAction(id: string, formData: FormData) {
       entry_date: requireString(formData, "entry_date", "Fecha"),
       description: optionalString(formData, "description"),
     });
-    await replaceJournalLines(id, parseLines(formData));
+    await replaceJournalLines(id, parseLines(formData), (await getCurrentRate())?.rate ?? null);
   } catch (e) {
     if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
     redirect(`/contabilidad/asientos/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);

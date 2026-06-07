@@ -45,6 +45,7 @@ type ClosureOrderRaw = {
   sale_rate: number | null;
   total_amount: number;
   cogs_total: number;
+  cogs_usd: number;
   confirmed_at: string;
   movement_id: string | null;
   customers: { name: string } | null;
@@ -65,7 +66,7 @@ async function fetchConfirmedOrders(
   const { data, error } = await sb
     .from("orders")
     .select(
-      "id,code,origin,payment_method,currency,amount_usd,sale_rate,total_amount,cogs_total,confirmed_at,movement_id,customers(name),order_lines(product_id,quantity,line_total,products(name))",
+      "id,code,origin,payment_method,currency,amount_usd,sale_rate,total_amount,cogs_total,cogs_usd,confirmed_at,movement_id,customers(name),order_lines(product_id,quantity,line_total,products(name))",
     )
     .eq("warehouse_id", warehouseId)
     .eq("status", "confirmada")
@@ -152,6 +153,7 @@ export async function previewDailyClosure(warehouseId: string, day: string): Pro
 
   let revenue = 0;
   let cogs = 0;
+  let cogsUsd = 0;
   let cash = 0;
   let transfer = 0;
   let usd = 0;
@@ -159,6 +161,7 @@ export async function previewDailyClosure(warehouseId: string, day: string): Pro
     const total = Number(o.total_amount);
     revenue += total;
     cogs += Number(o.cogs_total);
+    cogsUsd += Number(o.cogs_usd ?? 0);
     if (o.currency === "USD") {
       // Cobrada en dólares: a la caja entró amount_usd (snapshot al confirmar).
       usd += o.amount_usd != null ? Number(o.amount_usd) : 0;
@@ -183,7 +186,9 @@ export async function previewDailyClosure(warehouseId: string, day: string): Pro
     order_count: orders.length,
     revenue_cup: round2(revenue),
     cogs_cup: round2(cogs),
-    cogs_usd: rateUsed ? round2(cogs / rateUsed) : 0,
+    // COGS USD congelado por venta (moneda funcional); fallback a conversión
+    // con la última tasa para órdenes anteriores al modelo dual.
+    cogs_usd: cogsUsd > 0 ? round2(cogsUsd) : rateUsed ? round2(cogs / rateUsed) : 0,
     profit_cup: profit,
     commission_pct: pct,
     commission_cup: commission,
@@ -251,6 +256,10 @@ export async function confirmDailyClosure(warehouseId: string, day: string, user
       business: preview.business_slug,
       date: day,
       userId,
+      // Valores congelados al confirmar la venta (RPC confirm_pos_order).
+      rate: o.sale_rate != null ? Number(o.sale_rate) : null,
+      amountUsd: o.amount_usd != null ? Number(o.amount_usd) : null,
+      cogsUsd: o.cogs_usd != null ? Number(o.cogs_usd) : null,
     });
   }
 
