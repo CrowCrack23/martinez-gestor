@@ -1,7 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
-import { addFixedAsset, recordCashMovement } from "@/lib/capital";
+import { addFixedAsset, deleteCashMovement, deleteFixedAsset, recordCashMovement } from "@/lib/capital";
 import { optionalString, requireString, ValidationError } from "@/lib/validation";
 
 export async function addFixedAssetAction(formData: FormData) {
@@ -23,6 +23,17 @@ export async function addFixedAssetAction(formData: FormData) {
     redirect(`/capital?business=${business}&error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
   }
   redirect(`/capital?business=${business}&success=Inversi%C3%B3n+registrada`);
+}
+
+export async function deleteFixedAssetAction(id: string, business: string) {
+  await requireRole(["admin"]);
+  try {
+    await deleteFixedAsset(id);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
+    redirect(`/capital?business=${business}&error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
+  }
+  redirect(`/capital?business=${business}&success=Inversi%C3%B3n+eliminada`);
 }
 
 export async function recordCashMovementAction(formData: FormData) {
@@ -49,4 +60,15 @@ export async function recordCashMovementAction(formData: FormData) {
     redirect(`/capital?business=${business}&error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
   }
   redirect(`/capital?business=${business}&success=Movimiento+registrado`);
+}
+
+export async function deleteCashMovementAction(id: string, business: string) {
+  await requireRole(["admin", "contador"]);
+  try {
+    await deleteCashMovement(id);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
+    redirect(`/capital?business=${business}&error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
+  }
+  redirect(`/capital?business=${business}&success=Movimiento+eliminado`);
 }

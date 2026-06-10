@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
-import { createJournalEntry, trialBalance } from "./accounting";
+import { createJournalEntry, deleteJournalEntry, trialBalance } from "./accounting";
 import { stockValuation } from "./costing";
 import { listWarehouses } from "./warehouses";
 import { getRate, assertFreshRate } from "./currency";
@@ -240,6 +240,27 @@ export async function addFixedAsset(input: {
   bust();
 }
 
+/**
+ * Elimina una inversión en infraestructura registrada por error y reversa su
+ * asiento asociado. Si el asiento ya está contabilizado, `deleteJournalEntry`
+ * lanza y se aborta el borrado (hay que reversarlo en Contabilidad primero).
+ */
+export async function deleteFixedAsset(id: string): Promise<void> {
+  const sb = getSupabase();
+  const { data: asset, error } = await sb
+    .from("fixed_assets")
+    .select("id, journal_entry_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!asset) return;
+  // Primero el asiento (lanza si está contabilizado → no se borra el activo).
+  if (asset.journal_entry_id) await deleteJournalEntry(asset.journal_entry_id);
+  const { error: dErr } = await sb.from("fixed_assets").delete().eq("id", id);
+  if (dErr) throw dErr;
+  bust();
+}
+
 // ── Ingresos y gastos manuales ───────────────────────────────────────────
 
 /**
@@ -308,5 +329,51 @@ export async function recordCashMovement(input: {
             { ...cajaLine, debit: 0, credit: amountCup, debit_usd: 0, credit_usd: amountUsd },
           ],
   });
+  bust();
+}
+
+export type CashMovementRow = {
+  id: string;
+  entry_date: string;
+  description: string;
+  /** Monto en CUP del asiento (lado debe). */
+  amount: number;
+  status: Database["public"]["Tables"]["journal_entries"]["Row"]["status"];
+};
+
+/**
+ * Ingresos/gastos manuales recientes del negocio. No hay tabla propia: cada uno
+ * ES un asiento con reference_type='mov_caja' (ver recordCashMovement).
+ */
+export const listCashMovements = unstable_cache(
+  async (business: string, limit = 30): Promise<CashMovementRow[]> => {
+    const sb = getSupabase();
+    const { data, error } = await sb
+      .from("journal_entries")
+      .select("id, entry_date, description, total_debit, status")
+      .eq("reference_type", "mov_caja")
+      .eq("business", business)
+      .order("entry_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      entry_date: r.entry_date,
+      description: r.description,
+      amount: Number(r.total_debit),
+      status: r.status,
+    }));
+  },
+  ["cash_movements_list"],
+  { revalidate: 30, tags: [TAG] },
+);
+
+/**
+ * Elimina un ingreso/gasto manual = borra su asiento. `deleteJournalEntry`
+ * bloquea si ya está contabilizado.
+ */
+export async function deleteCashMovement(entryId: string): Promise<void> {
+  await deleteJournalEntry(entryId);
   bust();
 }

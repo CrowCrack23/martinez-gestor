@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth";
 import { listBusinessesLite } from "@/lib/businesses";
-import { capitalSnapshot, listFixedAssets } from "@/lib/capital";
+import { capitalSnapshot, listCashMovements, listFixedAssets } from "@/lib/capital";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,8 @@ import { Select } from "@/components/ui/select";
 import { Flash } from "@/components/flash";
 import { RateBanner } from "@/components/rate-banner";
 import { formatUsd } from "@/lib/currency";
-import { addFixedAssetAction, recordCashMovementAction } from "./actions";
+import { JOURNAL_STATUS_LABEL } from "@/lib/accounting";
+import { addFixedAssetAction, deleteCashMovementAction, deleteFixedAssetAction, recordCashMovementAction } from "./actions";
 
 type SP = Promise<{ business?: string; error?: string; success?: string }>;
 
@@ -22,10 +23,14 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
   const sp = await searchParams;
   const businesses = await listBusinessesLite();
   const business = sp.business || businesses.find((b) => b.slug === "mipyme")?.slug || businesses[0]?.slug || "";
-  const [snapshot, assets] = await Promise.all([capitalSnapshot(business), listFixedAssets(business)]);
-  const today = new Date().toISOString().slice(0, 10);
   const isAdmin = user.roles.includes("admin");
   const canRecord = isAdmin || user.roles.includes("contador");
+  const [snapshot, assets, cashMovements] = await Promise.all([
+    capitalSnapshot(business),
+    listFixedAssets(business),
+    canRecord ? listCashMovements(business) : Promise.resolve([]),
+  ]);
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="space-y-6">
@@ -209,6 +214,41 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
               </div>
               <Button type="submit" size="sm">Registrar</Button>
             </form>
+
+            {cashMovements.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[560px]">
+                  <thead className="text-left text-muted-foreground border-b">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Fecha</th>
+                      <th className="px-4 py-3 font-medium">Concepto</th>
+                      <th className="px-4 py-3 font-medium text-right">Monto (CUP)</th>
+                      <th className="px-4 py-3 font-medium">Estado</th>
+                      <th className="px-4 py-3 font-medium text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cashMovements.map((m) => (
+                      <tr key={m.id} className="border-b last:border-b-0">
+                        <td className="px-4 py-3">{m.entry_date}</td>
+                        <td className="px-4 py-3">{m.description}</td>
+                        <td className="px-4 py-3 text-right font-mono">{fmt(m.amount)}</td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs">{JOURNAL_STATUS_LABEL[m.status]}</td>
+                        <td className="px-4 py-3 text-right">
+                          {m.status === "contabilizada" ? (
+                            <span className="text-xs text-muted-foreground">Contabilizado</span>
+                          ) : (
+                            <form action={deleteCashMovementAction.bind(null, m.id, business)} className="inline">
+                              <Button type="submit" variant="destructive" size="sm">Eliminar</Button>
+                            </form>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -247,12 +287,13 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
                   <th className="px-4 py-3 font-medium">Descripción</th>
                   <th className="px-4 py-3 font-medium text-right">Monto</th>
                   <th className="px-4 py-3 font-medium">Notas</th>
+                  {isAdmin && <th className="px-4 py-3 font-medium text-right">Acciones</th>}
                 </tr>
               </thead>
               <tbody>
                 {assets.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground text-xs">
+                    <td colSpan={isAdmin ? 5 : 4} className="px-4 py-6 text-center text-muted-foreground text-xs">
                       Sin inversiones en infraestructura registradas.
                     </td>
                   </tr>
@@ -263,6 +304,13 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
                     <td className="px-4 py-3">{a.name}</td>
                     <td className="px-4 py-3 text-right font-mono">{fmt(a.amount)}</td>
                     <td className="px-4 py-3 text-muted-foreground">{a.notes || "—"}</td>
+                    {isAdmin && (
+                      <td className="px-4 py-3 text-right">
+                        <form action={deleteFixedAssetAction.bind(null, a.id, business)} className="inline">
+                          <Button type="submit" variant="destructive" size="sm">Eliminar</Button>
+                        </form>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

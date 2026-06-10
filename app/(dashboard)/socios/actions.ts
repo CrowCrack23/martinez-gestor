@@ -4,6 +4,8 @@ import { requireRole } from "@/lib/auth";
 import {
   addContribution,
   createPartner,
+  deleteContribution,
+  deletePartner,
   setGrowthPct,
   updatePartner,
 } from "@/lib/partners";
@@ -58,6 +60,17 @@ export async function togglePartnerAction(id: string, business: string, active: 
   redirect(`/socios?business=${business}&success=Socio+actualizado`);
 }
 
+export async function deletePartnerAction(id: string, business: string) {
+  await requireRole(["admin"]);
+  try {
+    await deletePartner(id);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
+    redirect(`/socios?business=${business}&error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
+  }
+  redirect(`/socios?business=${business}&success=Socio+eliminado`);
+}
+
 export async function setGrowthPctAction(formData: FormData) {
   const user = await requireRole(["admin"]);
   const business = String(formData.get("business_slug") ?? "");
@@ -96,4 +109,15 @@ export async function addContributionAction(formData: FormData) {
     redirect(`/socios/aportes?business=${business}&error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
   }
   redirect(`/socios/aportes?business=${business}&success=Aporte+registrado`);
+}
+
+export async function deleteContributionAction(id: string, business: string) {
+  await requireRole(["admin"]);
+  try {
+    await deleteContribution(id);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
+    redirect(`/socios/aportes?business=${business}&error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
+  }
+  redirect(`/socios/aportes?business=${business}&success=Aporte+eliminado`);
 }

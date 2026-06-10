@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Flash } from "@/components/flash";
-import { confirmDistributionAction, markPartnerPaidAction } from "./actions";
+import { confirmDistributionAction, markPartnerPaidAction, reopenDistributionAction } from "./actions";
 
 type SP = Promise<{ business?: string; month?: string; drafts?: string; error?: string; success?: string }>;
 
@@ -165,9 +165,14 @@ export default async function RepartoPage({ searchParams }: { searchParams: SP }
                       (empresa {d.growth_pct.toFixed(2)} % = {fmt(d.growth_amount)})
                     </span>
                   </div>
-                  <span className={`text-xs rounded-full px-2 py-0.5 ${d.status === "pagada" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
-                    {STATUS_LABEL[d.status] ?? d.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs rounded-full px-2 py-0.5 ${d.status === "pagada" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
+                      {STATUS_LABEL[d.status] ?? d.status}
+                    </span>
+                    <form action={reopenDistributionAction.bind(null, business, d.period_month.slice(0, 7))} className="inline">
+                      <Button type="submit" variant="destructive" size="sm">Reabrir</Button>
+                    </form>
+                  </div>
                 </div>
                 <table className="w-full text-sm">
                   <tbody>

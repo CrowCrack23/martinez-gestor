@@ -4,8 +4,10 @@ import { capitalSnapshot } from "@/lib/capital";
 import {
   HOLDER_KIND_LABEL,
   HOLDER_LOCATION_LABEL,
+  MOVEMENT_KIND_LABEL,
   holderBalances,
   listHolders,
+  listRecentMovements,
   type HolderLocation,
 } from "@/lib/money-holders";
 import { REM_BUSINESS_LABEL } from "@/lib/remittances";
@@ -16,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Flash } from "@/components/flash";
-import { addMovementAction, createHolderAction, toggleHolderAction } from "./actions";
+import { addMovementAction, createHolderAction, deleteMovementAction, toggleHolderAction } from "./actions";
 
 type SP = Promise<{ business?: string; error?: string; success?: string }>;
 
@@ -40,11 +42,12 @@ export default async function DineroRemesasPage({ searchParams }: { searchParams
     ? (sp.business as RemBusiness)
     : "remesas_eeuu";
   const isAdmin = hasRole(user, ["admin"]);
-  const [overview, holders, snapshot, couriers] = await Promise.all([
+  const [overview, holders, snapshot, couriers, recentMovements] = await Promise.all([
     holderBalances(business),
     listHolders(business),
     capitalSnapshot(business),
     listUsersByRole("mensajero"),
+    isAdmin ? listRecentMovements(business) : Promise.resolve([]),
   ]);
   const today = new Date().toISOString().slice(0, 10);
   const activeHolders = holders.filter((h) => h.active);
@@ -255,6 +258,62 @@ export default async function DineroRemesasPage({ searchParams }: { searchParams
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {isAdmin && (
+        <Card>
+          <CardContent className="pt-6 space-y-3">
+            <div>
+              <div className="font-medium">Movimientos recientes</div>
+              <div className="text-sm text-muted-foreground">
+                Para corregir un registro mal hecho. Los movimientos automáticos de entrega de remesa no se borran aquí.
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="text-left text-muted-foreground border-b">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Fecha</th>
+                    <th className="px-4 py-3 font-medium">Tenedor</th>
+                    <th className="px-4 py-3 font-medium">Tipo</th>
+                    <th className="px-4 py-3 font-medium text-right">Monto</th>
+                    <th className="px-4 py-3 font-medium">Notas</th>
+                    <th className="px-4 py-3 font-medium text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentMovements.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground text-xs">
+                        Sin movimientos registrados.
+                      </td>
+                    </tr>
+                  )}
+                  {recentMovements.map((m) => (
+                    <tr key={m.id} className="border-b last:border-b-0">
+                      <td className="px-4 py-3">{m.occurred_at}</td>
+                      <td className="px-4 py-3">{m.holder_name}</td>
+                      <td className="px-4 py-3">{MOVEMENT_KIND_LABEL[m.kind]}</td>
+                      <td className={`px-4 py-3 text-right font-mono ${m.amount < 0 ? "text-destructive" : ""}`}>
+                        {fmt(m.amount)} {m.currency}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{m.notes || "—"}</td>
+                      <td className="px-4 py-3 text-right">
+                        {m.remittance_id ? (
+                          <span className="text-xs text-muted-foreground">Automático</span>
+                        ) : (
+                          <form action={deleteMovementAction.bind(null, m.id, business)} className="inline">
+                            <Button type="submit" variant="destructive" size="sm">Eliminar</Button>
+                          </form>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

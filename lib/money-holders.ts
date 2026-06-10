@@ -181,3 +181,51 @@ export const listMovements = unstable_cache(
   ["money_movements_list"],
   { revalidate: 30, tags: [TAG] },
 );
+
+export type RecentMovement = MoneyMovement & { holder_name: string };
+
+/** Últimos movimientos del negocio (con el nombre del tenedor), para revisar y corregir. */
+export const listRecentMovements = unstable_cache(
+  async (business: string, limit = 30): Promise<RecentMovement[]> => {
+    const sb = getSupabase();
+    const { data, error } = await sb
+      .from("money_movements")
+      .select("*, money_holders(name)")
+      .eq("business_slug", business)
+      .order("occurred_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    type R = MoneyMovement & { money_holders: { name: string } | null };
+    return ((data ?? []) as unknown as R[]).map((m) => ({
+      ...m,
+      amount: Number(m.amount),
+      holder_name: m.money_holders?.name ?? "—",
+    }));
+  },
+  ["money_movements_recent"],
+  { revalidate: 30, tags: [TAG] },
+);
+
+/**
+ * Elimina un movimiento manual registrado por error. Los movimientos generados
+ * automáticamente al entregar una remesa (`remittance_id` no nulo) no se borran
+ * aquí: hay que cancelar/editar la remesa. El saldo del tenedor se recalcula
+ * solo (es Σ de movimientos).
+ */
+export async function deleteMovement(id: string): Promise<void> {
+  const sb = getSupabase();
+  const { data: mov, error } = await sb
+    .from("money_movements")
+    .select("id, remittance_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!mov) return;
+  if (mov.remittance_id) {
+    throw new Error("Este movimiento se generó al entregar una remesa. Cancela o edita la remesa en su lugar.");
+  }
+  const { error: dErr } = await sb.from("money_movements").delete().eq("id", id);
+  if (dErr) throw dErr;
+  bust();
+}

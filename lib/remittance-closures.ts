@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
-import { createJournalEntry } from "./accounting";
+import { createJournalEntry, deleteEntriesByReference } from "./accounting";
 import { generateCourierPayEntry } from "./auto-accounting";
 import { listPartners } from "./partners";
 import type { Database, RemittanceOrigin } from "./supabase-types";
@@ -173,6 +173,34 @@ export async function confirmWeeklyClosure(business: string, weekStart: string, 
   });
   bust();
   return data.id;
+}
+
+/**
+ * Reabre un cuadre semanal de remesas confirmado: anula el asiento de pago a
+ * mensajeros y los asientos de reparto a socios ya pagados, y borra el cuadre
+ * (las líneas de socio caen en cascada). Aborta si algún asiento ya está
+ * contabilizado.
+ */
+export async function reopenWeeklyClosure(business: string, weekStart: string): Promise<void> {
+  const sb = getSupabase();
+  const { data: closure, error } = await sb
+    .from("remittance_weekly_closures")
+    .select("id, remittance_closure_partner_lines(id)")
+    .eq("business_slug", business)
+    .eq("week_start", weekStart)
+    .maybeSingle();
+  if (error) throw error;
+  if (!closure) throw new Error("No hay un cuadre confirmado para esa semana.");
+  type Row = { id: string; remittance_closure_partner_lines: { id: string }[] | null };
+  const c = closure as unknown as Row;
+  // Pago a mensajeros (reference_type='cuadre_remesas') + reparto por socio.
+  await deleteEntriesByReference("cuadre_remesas", c.id);
+  for (const l of c.remittance_closure_partner_lines ?? []) {
+    await deleteEntriesByReference("reparto_remesas", l.id);
+  }
+  const { error: dErr } = await sb.from("remittance_weekly_closures").delete().eq("id", c.id);
+  if (dErr) throw dErr;
+  bust();
 }
 
 export type RemittanceClosureRow = RemittanceWeeklyClosure & {

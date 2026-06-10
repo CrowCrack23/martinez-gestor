@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Flash } from "@/components/flash";
 import { formatPrice } from "@/lib/format";
-import { confirmDailyClosureAction } from "./actions";
+import { confirmDailyClosureAction, reopenDailyClosureAction } from "./actions";
 
 type SP = Promise<{ warehouse?: string; day?: string; error?: string; success?: string }>;
 
@@ -32,6 +32,7 @@ export default async function CuadresPage({ searchParams }: { searchParams: SP }
   ]);
 
   const confirm = warehouseId ? confirmDailyClosureAction.bind(null, warehouseId, day) : null;
+  const isAdmin = user.roles.includes("admin");
 
   return (
     <div className="space-y-6">
@@ -133,8 +134,13 @@ export default async function CuadresPage({ searchParams }: { searchParams: SP }
 
           {preview.already_closed ? (
             <Card>
-              <CardContent className="pt-6 text-sm">
-                ✅ El cuadre de este día ya está confirmado (ver historial abajo).
+              <CardContent className="pt-6 flex flex-wrap gap-3 items-center justify-between text-sm">
+                <div>✅ El cuadre de este día ya está confirmado (ver historial abajo).</div>
+                {isAdmin && warehouseId && (
+                  <form action={reopenDailyClosureAction.bind(null, warehouseId, day)}>
+                    <Button type="submit" variant="destructive" size="sm">Reabrir cuadre</Button>
+                  </form>
+                )}
               </CardContent>
             </Card>
           ) : (

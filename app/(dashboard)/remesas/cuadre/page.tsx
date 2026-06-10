@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Flash } from "@/components/flash";
-import { confirmRemittanceClosureAction, markRemittancePartnerPaidAction } from "./actions";
+import { confirmRemittanceClosureAction, markRemittancePartnerPaidAction, reopenRemittanceClosureAction } from "./actions";
 
 type SP = Promise<{ business?: string; week?: string; error?: string; success?: string }>;
 
@@ -140,9 +140,16 @@ export default async function CuadreRemesasPage({ searchParams }: { searchParams
                       (comisiones {fmt(c.commissions_cup)} · tasas {fmt(c.spread_cup)} · mensajeros −{fmt(c.courier_pay_cup)} · neto {fmt(c.net_cup)})
                     </span>
                   </div>
-                  <span className={`text-xs rounded-full px-2 py-0.5 ${c.status === "pagada" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
-                    {STATUS_LABEL[c.status] ?? c.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs rounded-full px-2 py-0.5 ${c.status === "pagada" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
+                      {STATUS_LABEL[c.status] ?? c.status}
+                    </span>
+                    {isAdmin && (
+                      <form action={reopenRemittanceClosureAction.bind(null, business, c.week_start)} className="inline">
+                        <Button type="submit" variant="destructive" size="sm">Reabrir</Button>
+                      </form>
+                    )}
+                  </div>
                 </div>
                 {c.lines.length > 0 && (
                   <table className="w-full text-sm">

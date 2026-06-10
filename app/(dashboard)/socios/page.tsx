@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Flash } from "@/components/flash";
 import {
   createPartnerAction,
+  deletePartnerAction,
   setGrowthPctAction,
   togglePartnerAction,
   updatePartnerAction,
@@ -83,6 +84,7 @@ export default async function SociosPage({ searchParams }: { searchParams: SP })
               {partners.map((p) => {
                 const update = updatePartnerAction.bind(null, p.id, business);
                 const toggle = togglePartnerAction.bind(null, p.id, business, !p.active);
+                const remove = deletePartnerAction.bind(null, p.id, business);
                 return (
                   <tr key={p.id} className="border-b last:border-b-0">
                     <td className="px-4 py-3">
@@ -111,11 +113,16 @@ export default async function SociosPage({ searchParams }: { searchParams: SP })
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <form action={toggle} className="inline">
-                        <Button type="submit" variant="outline" size="sm">
-                          {p.active ? "Desactivar" : "Activar"}
-                        </Button>
-                      </form>
+                      <div className="inline-flex gap-2 justify-end">
+                        <form action={toggle} className="inline">
+                          <Button type="submit" variant="outline" size="sm">
+                            {p.active ? "Desactivar" : "Activar"}
+                          </Button>
+                        </form>
+                        <form action={remove} className="inline">
+                          <Button type="submit" variant="destructive" size="sm">Eliminar</Button>
+                        </form>
+                      </div>
                     </td>
                   </tr>
                 );

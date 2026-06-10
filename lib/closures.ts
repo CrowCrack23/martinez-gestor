@@ -2,6 +2,7 @@ import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { getLatestRate } from "./remittances";
+import { deleteEntriesByReference } from "./accounting";
 import { generateCommissionEntry, generateSaleEntry } from "./auto-accounting";
 import { getPointOfSaleStaff } from "./points-of-sale";
 import type { OrderCurrency, OrderOrigin, PaymentMethod } from "./supabase-types";
@@ -275,6 +276,30 @@ export async function confirmDailyClosure(warehouseId: string, day: string, user
 
   bust();
   return data.id;
+}
+
+/**
+ * Reabre un cuadre diario confirmado: anula el asiento de comisión que generó y
+ * borra el snapshot, dejando el día como antes del cuadre. Los asientos de venta
+ * (respaldo de las ventas, idempotentes) NO se tocan: pertenecen a las ventas,
+ * no al cuadre, y se regeneran sin duplicar al reconfirmar. Aborta si la
+ * comisión ya está contabilizada.
+ */
+export async function reopenDailyClosure(warehouseId: string, day: string): Promise<void> {
+  const sb = getSupabase();
+  const { data: closure, error } = await sb
+    .from("daily_closures")
+    .select("id")
+    .eq("warehouse_id", warehouseId)
+    .eq("day", day)
+    .maybeSingle();
+  if (error) throw error;
+  if (!closure) throw new Error("No hay un cuadre confirmado para ese día.");
+  // Anula la comisión (reference_type='cuadre'); lanza si está contabilizada.
+  await deleteEntriesByReference("cuadre", closure.id);
+  const { error: dErr } = await sb.from("daily_closures").delete().eq("id", closure.id);
+  if (dErr) throw dErr;
+  bust();
 }
 
 export type DailyClosureRow = {

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Flash } from "@/components/flash";
-import { addContributionAction } from "../actions";
+import { addContributionAction, deleteContributionAction } from "../actions";
 
 type SP = Promise<{ business?: string; error?: string; success?: string }>;
 
@@ -128,12 +128,13 @@ export default async function AportesPage({ searchParams }: { searchParams: SP }
                 <th className="px-4 py-3 font-medium text-right">Monto</th>
                 <th className="px-4 py-3 font-medium">Moneda</th>
                 <th className="px-4 py-3 font-medium">Notas</th>
+                <th className="px-4 py-3 font-medium text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {contributions.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground text-xs">
+                  <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground text-xs">
                     Sin aportes registrados.
                   </td>
                 </tr>
@@ -145,6 +146,11 @@ export default async function AportesPage({ searchParams }: { searchParams: SP }
                   <td className="px-4 py-3 text-right font-mono">{fmt(c.amount)}</td>
                   <td className="px-4 py-3">{c.currency}</td>
                   <td className="px-4 py-3 text-muted-foreground">{c.notes || "—"}</td>
+                  <td className="px-4 py-3 text-right">
+                    <form action={deleteContributionAction.bind(null, c.id, business)} className="inline">
+                      <Button type="submit" variant="destructive" size="sm">Eliminar</Button>
+                    </form>
+                  </td>
                 </tr>
               ))}
             </tbody>

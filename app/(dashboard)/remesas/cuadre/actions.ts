@@ -1,7 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
-import { confirmWeeklyClosure, markRemittancePartnerPaid } from "@/lib/remittance-closures";
+import { confirmWeeklyClosure, markRemittancePartnerPaid, reopenWeeklyClosure } from "@/lib/remittance-closures";
 import { requireString } from "@/lib/validation";
 
 export async function confirmRemittanceClosureAction(formData: FormData) {
@@ -19,6 +19,17 @@ export async function confirmRemittanceClosureAction(formData: FormData) {
     redirect(`/remesas/cuadre?business=${business}&week=${week}&error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
   }
   redirect(`/remesas/cuadre?business=${business}&week=${week}&success=Cuadre+confirmado`);
+}
+
+export async function reopenRemittanceClosureAction(business: string, week: string) {
+  await requireRole(["admin"]);
+  try {
+    await reopenWeeklyClosure(business, week);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
+    redirect(`/remesas/cuadre?business=${business}&week=${week}&error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
+  }
+  redirect(`/remesas/cuadre?business=${business}&week=${week}&success=Cuadre+reabierto`);
 }
 
 export async function markRemittancePartnerPaidAction(lineId: string, business: string, week: string, formData: FormData) {

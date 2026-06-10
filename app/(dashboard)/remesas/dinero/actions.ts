@@ -1,7 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
-import { addMovement, createHolder, updateHolder, type HolderKind, type HolderLocation, type MovementKind } from "@/lib/money-holders";
+import { addMovement, createHolder, deleteMovement, updateHolder, type HolderKind, type HolderLocation, type MovementKind } from "@/lib/money-holders";
 import type { DeliveryCurrency } from "@/lib/supabase-types";
 import { optionalString, requireString, ValidationError } from "@/lib/validation";
 
@@ -42,6 +42,17 @@ export async function toggleHolderAction(id: string, business: string, active: b
     redirect(`/remesas/dinero?business=${business}&error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
   }
   redirect(`/remesas/dinero?business=${business}&success=Actualizado`);
+}
+
+export async function deleteMovementAction(id: string, business: string) {
+  await requireRole(["admin"]);
+  try {
+    await deleteMovement(id);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
+    redirect(`/remesas/dinero?business=${business}&error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
+  }
+  redirect(`/remesas/dinero?business=${business}&success=Movimiento+eliminado`);
 }
 
 export async function addMovementAction(formData: FormData) {

@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
-import { createJournalEntry } from "./accounting";
+import { createJournalEntry, deleteJournalEntry } from "./accounting";
 import { assertFreshRate } from "./currency";
 import type { Database } from "./supabase-types";
 
@@ -88,6 +88,26 @@ export async function updatePartner(
   if (patch.profit_pct != null) validatePct(patch.profit_pct);
   const sb = getSupabase();
   const { error } = await sb.from("business_partners").update(patch).eq("id", id);
+  if (error) throw error;
+  bust();
+}
+
+/**
+ * Elimina un socio agregado por error. Solo si no tiene historial contable
+ * (aportes de capital ni líneas de reparto): esos tienen FK `on delete restrict`
+ * y borrarlo descuadraría la contabilidad. Si lo tiene, hay que desactivarlo.
+ */
+export async function deletePartner(id: string): Promise<void> {
+  const sb = getSupabase();
+  const [{ count: contribs, error: cErr }, { count: shares, error: sErr }] = await Promise.all([
+    sb.from("capital_contributions").select("id", { count: "exact", head: true }).eq("partner_id", id),
+    sb.from("profit_distribution_lines").select("id", { count: "exact", head: true }).eq("partner_id", id),
+  ]);
+  if (cErr) throw cErr;
+  if (sErr) throw sErr;
+  if ((contribs ?? 0) > 0) throw new Error("El socio tiene aportes de capital registrados. Desactívalo en su lugar.");
+  if ((shares ?? 0) > 0) throw new Error("El socio ya entró en un reparto de ganancias. Desactívalo en su lugar.");
+  const { error } = await sb.from("business_partners").delete().eq("id", id);
   if (error) throw error;
   bust();
 }
@@ -205,5 +225,25 @@ export async function addContribution(input: {
   } catch (e) {
     console.error("[partners] asiento de aporte falló:", e);
   }
+  bust();
+}
+
+/**
+ * Elimina un aporte de capital registrado por error y reversa su asiento. Si el
+ * asiento ya está contabilizado, `deleteJournalEntry` lanza y se aborta (hay que
+ * reversarlo en Contabilidad primero).
+ */
+export async function deleteContribution(id: string): Promise<void> {
+  const sb = getSupabase();
+  const { data: c, error } = await sb
+    .from("capital_contributions")
+    .select("id, journal_entry_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!c) return;
+  if (c.journal_entry_id) await deleteJournalEntry(c.journal_entry_id);
+  const { error: dErr } = await sb.from("capital_contributions").delete().eq("id", id);
+  if (dErr) throw dErr;
   bust();
 }

@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
-import { createJournalEntry, incomeStatement } from "./accounting";
+import { createJournalEntry, deleteEntriesByReference, incomeStatement } from "./accounting";
 import { getGrowthPct, listPartners, percentagesStatus } from "./partners";
 import type { Database } from "./supabase-types";
 
@@ -160,6 +160,32 @@ export async function confirmDistribution(
   }
   bust();
   return data.id;
+}
+
+/**
+ * Reabre un reparto mensual confirmado: anula los asientos de pago a socios ya
+ * registrados y borra el reparto (las líneas caen en cascada). Aborta si algún
+ * asiento ya está contabilizado.
+ */
+export async function reopenDistribution(business: string, month: string): Promise<void> {
+  const { periodMonth } = monthRange(month);
+  const sb = getSupabase();
+  const { data: dist, error } = await sb
+    .from("profit_distributions")
+    .select("id, profit_distribution_lines(id)")
+    .eq("business_slug", business)
+    .eq("period_month", periodMonth)
+    .maybeSingle();
+  if (error) throw error;
+  if (!dist) throw new Error("No hay un reparto confirmado para ese mes.");
+  type Row = { id: string; profit_distribution_lines: { id: string }[] | null };
+  const d = dist as unknown as Row;
+  for (const l of d.profit_distribution_lines ?? []) {
+    await deleteEntriesByReference("reparto", l.id);
+  }
+  const { error: dErr } = await sb.from("profit_distributions").delete().eq("id", d.id);
+  if (dErr) throw dErr;
+  bust();
 }
 
 export type DistributionRow = ProfitDistribution & {

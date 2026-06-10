@@ -252,6 +252,22 @@ export async function deleteJournalEntry(id: string) {
   bust();
 }
 
+/**
+ * Borra todos los asientos generados para una referencia (p.ej. la comisión de
+ * un cuadre). Lanza si alguno está contabilizado (hay que reversarlo a mano
+ * primero), dejando el resto intacto. Para reabrir cierres/repartos.
+ */
+export async function deleteEntriesByReference(referenceType: string, referenceId: string): Promise<void> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("journal_entries")
+    .select("id")
+    .eq("reference_type", referenceType)
+    .eq("reference_id", referenceId);
+  if (error) throw error;
+  for (const e of data ?? []) await deleteJournalEntry(e.id);
+}
+
 // ── Trial balance ────────────────────────────────────────────────────────
 
 export type TrialBalanceRow = {
