@@ -18,7 +18,7 @@ import { OrderLineEditor } from "@/components/order-line-editor";
 import { getCurrentRate } from "@/lib/currency";
 import { formatDateTime, formatPrice } from "@/lib/format";
 import {
-  cancelOrderAction, confirmOrderAction, deleteOrderAction, updateOrderAction,
+  cancelOrderAction, confirmOrderAction, deleteOrderAction, undoConfirmOrderAction, updateOrderAction,
 } from "../actions";
 
 type Params = Promise<{ id: string }>;
@@ -106,6 +106,23 @@ export default async function VentaDetallePage({ params, searchParams }: { param
           </table>
         </div>
         </Card>
+
+        {o.status === "confirmada" && canDelete && (
+          <Card className="border-destructive/30">
+            <CardContent className="pt-6 flex flex-wrap gap-3 items-center justify-between">
+              <div>
+                <div className="font-medium">Anular confirmación</div>
+                <div className="text-sm text-muted-foreground">
+                  Repone el stock vendido, revierte la contabilidad y devuelve la venta a borrador (para corregirla o eliminarla).
+                </div>
+              </div>
+              <form action={undoConfirmOrderAction.bind(null, o.id)}>
+                <Button type="submit" variant="destructive">Anular confirmación</Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
         <div>
           <Button asChild variant="ghost"><Link href="/ventas">← Volver</Link></Button>
         </div>

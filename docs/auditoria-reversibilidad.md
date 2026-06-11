@@ -10,8 +10,8 @@ restricción contable correcta.
 | Módulo | Cómo se revierte |
 | --- | --- |
 | Almacenes, Clientes, Proveedores, Productos | Editar / **Eliminar** (valida referencias) |
-| Compras | Editar, **Cancelar**, **Eliminar** |
-| Ventas | Editar, **Cancelar**, **Eliminar** |
+| Compras | Editar, Cancelar, Eliminar **solo en borrador** — ver corrección #9 |
+| Ventas | Editar, Cancelar, Eliminar **solo en borrador** — ver corrección #10 |
 | Producción | **Cancelar**, **Eliminar** |
 | Nómina | Editar líneas, **Eliminar** período |
 | Empleados / Posiciones | Editar / **Eliminar** |
@@ -45,6 +45,17 @@ No deben tener "borrar fila"; se revierten con asiento/movimiento inverso:
 | 6 | **Cuadres** (diario) | `confirmDailyClosure` | No hay reabrir. |
 | 7 | **Remesas → Cuadre** | `confirmRemittanceClosure` | No hay reabrir. |
 | 8 | **Socios → Reparto** | `confirmDistribution` + `markPartnerPaid` | No hay deshacer; puede generar asientos/pagos. |
+| 9 | **Compras** | una orden **recibida** no se puede borrar ni cancelar | ⚠️ corrección: la auditoría inicial la dio por resuelta. Recibir genera movimiento de entrada + lotes FIFO + asiento; nada se revertía. |
+| 10 | **Ventas** | una orden **confirmada** no se puede borrar ni cancelar | Mismo caso espejo: confirmar genera salida + consumo FIFO + asiento. |
+
+### Corrección importante a la auditoría
+
+La clasificación inicial de Compras y Ventas como "bien resueltas" estaba **mal**:
+solo eran reversibles en *borrador*. Una vez recibida/confirmada quedaban
+atascadas. Esto es lo que reportó el cliente ("si me equivoco en una compra no la
+puedo borrar"). Es el mismo patrón que los cierres (Fase 3): una operación que
+generó efectos colaterales (stock, lotes, contabilidad) necesita una
+**anulación** que los revierta antes de poder borrar.
 
 ## Plan por fases
 
@@ -78,5 +89,13 @@ como antes del cierre). Si algún asiento ya está *contabilizado*, la reapertur
   (`reparto`) y borra el reparto (líneas en cascada).
 
 Helper común nuevo: `deleteEntriesByReference(type, id)` en `lib/accounting.ts`.
+
+**Fase 4 — anular recepción/confirmación (corrección #9/#10).**
+- #9 Compras: ✅ `undoReceivePurchaseOrder` (`/compras/[id]`). Solo admin. Revierte
+  stock, borra lotes y asiento, devuelve a borrador. Bloquea si la mercancía ya
+  se vendió/movió (lotes consumidos) o si el asiento está contabilizado.
+- #10 Ventas: ✅ `undoConfirmOrder` (`/ventas/[id]`). Solo admin. Devuelve los
+  lotes consumidos (`inventory_lot_consumptions`), repone stock, borra asiento de
+  venta y movimiento, y vuelve a borrador. Bloquea si el asiento está contabilizado.
 
 **Mejora aparte:** botón de "ajuste inverso" guiado en movimientos de inventario.

@@ -7,6 +7,7 @@ import {
   deletePurchaseOrder,
   receivePurchaseOrder,
   replacePurchaseOrderLines,
+  undoReceivePurchaseOrder,
   updatePurchaseOrderHeader,
   type PurchaseLineInput,
 } from "@/lib/purchases";
@@ -124,6 +125,19 @@ export async function cancelPurchaseOrderAction(id: string) {
     redirect(`/compras/${id}?error=${encodeURIComponent(msg)}`);
   }
   redirect(`/compras/${id}?success=Orden+cancelada`);
+}
+
+export async function undoReceivePurchaseOrderAction(id: string) {
+  // Anular recepción es exclusivo del dueño (revierte stock y contabilidad).
+  await requireRole(["admin"]);
+  try {
+    await undoReceivePurchaseOrder(id);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
+    const msg = e instanceof Error ? e.message : "Error";
+    redirect(`/compras/${id}?error=${encodeURIComponent(msg)}`);
+  }
+  redirect(`/compras/${id}?success=Recepci%C3%B3n+anulada+(vuelta+a+borrador)`);
 }
 
 export async function deletePurchaseOrderAction(id: string) {

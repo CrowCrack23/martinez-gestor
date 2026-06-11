@@ -3,6 +3,7 @@ import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { createMovement } from "./inventory";
 import { generatePurchaseEntry } from "./auto-accounting";
+import { deleteEntriesByReference } from "./accounting";
 import { createCatalogProduct } from "./products";
 import { assertFreshRate } from "./currency";
 import type { PurchaseOrderStatus } from "./supabase-types";
@@ -398,10 +399,81 @@ export async function deletePurchaseOrder(id: string): Promise<void> {
   const sb = getSupabase();
   const po = await getPurchaseOrder(id);
   if (!po) return;
-  if (po.status === "recibida") throw new Error("No se puede eliminar una orden recibida (afecta el inventario).");
+  if (po.status === "recibida") {
+    throw new Error("La orden está recibida. Anula primero la recepción (vuelve a borrador) y luego elimínala.");
+  }
   const { error } = await sb.from("purchase_orders").delete().eq("id", id);
   if (error) throw error;
   bust();
+}
+
+/**
+ * Anula la recepción de una orden recibida por error: revierte el stock, borra
+ * los lotes y el asiento de compra, y devuelve la orden a borrador (así se puede
+ * editar o eliminar). Solo es seguro si la mercancía recibida NO se ha vendido ni
+ * movido (lotes intactos); si no, hay que corregir con un ajuste de inventario.
+ * Aborta sin tocar nada si el asiento de compra ya está contabilizado.
+ */
+export async function undoReceivePurchaseOrder(id: string): Promise<void> {
+  const sb = getSupabase();
+  const po = await getPurchaseOrder(id);
+  if (!po) throw new Error("Orden no encontrada.");
+  if (po.status !== "recibida") throw new Error("Solo se puede anular la recepción de una orden recibida.");
+  if (!po.movement_id) throw new Error("La orden no tiene movimiento de inventario asociado.");
+
+  // 1. La mercancía recibida no se puede haber consumido (lotes intactos).
+  const { data: lots, error: lErr } = await sb
+    .from("inventory_lots")
+    .select("id, qty_received, qty_remaining")
+    .eq("movement_id", po.movement_id);
+  if (lErr) throw lErr;
+  for (const lot of lots ?? []) {
+    if (Number(lot.qty_remaining) !== Number(lot.qty_received)) {
+      throw new Error("No se puede anular: parte de esta mercancía ya se vendió o se movió. Corrige con un ajuste de inventario.");
+    }
+  }
+
+  // 2. Borra el asiento de compra (lanza si está contabilizado → no se toca nada más).
+  await deleteEntriesByReference("compra", po.id);
+
+  // 3. Revierte el stock del almacén destino (el trigger solo aplica en alta, no
+  //    en baja): resta las cantidades recibidas, agregadas por producto.
+  const byProduct = new Map<string, number>();
+  for (const l of po.lines) byProduct.set(l.product_id, (byProduct.get(l.product_id) ?? 0) + l.quantity);
+  for (const [productId, qty] of byProduct) {
+    const { data: stock, error: sErr } = await sb
+      .from("stock_locations")
+      .select("quantity")
+      .eq("product_id", productId)
+      .eq("warehouse_id", po.warehouse_id)
+      .maybeSingle();
+    if (sErr) throw sErr;
+    const current = Number(stock?.quantity ?? 0);
+    const { error: uErr } = await sb
+      .from("stock_locations")
+      .update({ quantity: current - qty })
+      .eq("product_id", productId)
+      .eq("warehouse_id", po.warehouse_id);
+    if (uErr) throw uErr;
+  }
+
+  // 4. Borra los lotes de esta recepción (movement_id es on delete set null, no cascade).
+  const { error: dlErr } = await sb.from("inventory_lots").delete().eq("movement_id", po.movement_id);
+  if (dlErr) throw dlErr;
+
+  // 5. Borra el movimiento (cascade borra sus líneas).
+  const { error: dmErr } = await sb.from("inventory_movements").delete().eq("id", po.movement_id);
+  if (dmErr) throw dmErr;
+
+  // 6. Devuelve la orden a borrador.
+  const { error: poErr } = await sb
+    .from("purchase_orders")
+    .update({ status: "borrador", received_at: null, received_by: null, movement_id: null })
+    .eq("id", id);
+  if (poErr) throw poErr;
+
+  bust();
+  revalidateTag("costing", "max");
 }
 
 export const STATUS_LABEL: Record<PurchaseOrderStatus, string> = {

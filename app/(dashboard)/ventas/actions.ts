@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import {
   cancelOrder, confirmOrder, createOrder, deleteOrder,
-  replaceOrderLines, updateOrderHeader, type OrderLineInput,
+  replaceOrderLines, undoConfirmOrder, updateOrderHeader, type OrderLineInput,
 } from "@/lib/sales";
 import type { OrderCurrency, OrderOrigin, PaymentMethod } from "@/lib/supabase-types";
 import { optionalString, requireString, ValidationError } from "@/lib/validation";
@@ -101,6 +101,17 @@ export async function cancelOrderAction(id: string) {
   try { await cancelOrder(id); }
   catch (e) { redirect(`/ventas/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`); }
   redirect(`/ventas/${id}?success=Orden+cancelada`);
+}
+
+export async function undoConfirmOrderAction(id: string) {
+  // Anular confirmación es exclusivo del dueño (revierte stock y contabilidad).
+  await requireRole(["admin"]);
+  try { await undoConfirmOrder(id); }
+  catch (e) {
+    if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
+    redirect(`/ventas/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
+  }
+  redirect(`/ventas/${id}?success=Confirmaci%C3%B3n+anulada+(vuelta+a+borrador)`);
 }
 
 export async function deleteOrderAction(id: string) {

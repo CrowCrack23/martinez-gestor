@@ -4,6 +4,7 @@ import { getSupabase } from "./supabase";
 import { createMovement } from "./inventory";
 import { movementCostDual } from "./costing";
 import { generateSaleEntry } from "./auto-accounting";
+import { deleteEntriesByReference } from "./accounting";
 import { assertFreshRate, priceCupFromUsd } from "./currency";
 import type { OrderCurrency, OrderOrigin, OrderStatus, PaymentMethod } from "./supabase-types";
 
@@ -387,10 +388,95 @@ export async function deleteOrder(id: string): Promise<void> {
   const sb = getSupabase();
   const o = await getOrder(id);
   if (!o) return;
-  if (o.status === "confirmada") throw new Error("No se puede eliminar una orden confirmada (afecta el inventario).");
+  if (o.status === "confirmada") {
+    throw new Error("La venta está confirmada. Anula primero la confirmación (vuelve a borrador) y luego elimínala.");
+  }
   const { error } = await sb.from("orders").delete().eq("id", id);
   if (error) throw error;
   bust();
+}
+
+/**
+ * Anula la confirmación de una venta confirmada por error: devuelve a su lote
+ * cada unidad consumida por FIFO, repone el stock, borra el asiento de venta y
+ * el movimiento de salida, y deja la orden en borrador (para corregir o
+ * eliminar). Aborta sin tocar nada si el asiento de venta ya está contabilizado.
+ */
+export async function undoConfirmOrder(id: string): Promise<void> {
+  const sb = getSupabase();
+  const o = await getOrder(id);
+  if (!o) throw new Error("Orden no encontrada.");
+  if (o.status !== "confirmada") throw new Error("Solo se puede anular la confirmación de una venta confirmada.");
+  if (!o.movement_id) throw new Error("La venta no tiene movimiento de inventario asociado.");
+
+  // 1. Borra el asiento de venta (lanza si está contabilizado → no se toca nada más).
+  await deleteEntriesByReference("venta", o.id);
+
+  // 2. Devuelve a cada lote las unidades que esta salida consumió por FIFO.
+  const { data: consumptions, error: cErr } = await sb
+    .from("inventory_lot_consumptions")
+    .select("id, lot_id, quantity")
+    .eq("movement_id", o.movement_id);
+  if (cErr) throw cErr;
+  for (const c of consumptions ?? []) {
+    const { data: lot, error: gErr } = await sb
+      .from("inventory_lots")
+      .select("qty_remaining")
+      .eq("id", c.lot_id)
+      .single();
+    if (gErr) throw gErr;
+    const { error: uErr } = await sb
+      .from("inventory_lots")
+      .update({ qty_remaining: Number(lot.qty_remaining) + Number(c.quantity) })
+      .eq("id", c.lot_id);
+    if (uErr) throw uErr;
+  }
+  // Borra los consumos (lot_id es on delete restrict; deben irse antes del movimiento).
+  const { error: dcErr } = await sb.from("inventory_lot_consumptions").delete().eq("movement_id", o.movement_id);
+  if (dcErr) throw dcErr;
+
+  // 3. Repone el stock del almacén origen (el trigger no revierte en baja).
+  const byProduct = new Map<string, number>();
+  for (const l of o.lines) byProduct.set(l.product_id, (byProduct.get(l.product_id) ?? 0) + l.quantity);
+  for (const [productId, qty] of byProduct) {
+    const { data: stock, error: sErr } = await sb
+      .from("stock_locations")
+      .select("quantity")
+      .eq("product_id", productId)
+      .eq("warehouse_id", o.warehouse_id)
+      .maybeSingle();
+    if (sErr) throw sErr;
+    const current = Number(stock?.quantity ?? 0);
+    const { error: upErr } = await sb
+      .from("stock_locations")
+      .update({ quantity: current + qty })
+      .eq("product_id", productId)
+      .eq("warehouse_id", o.warehouse_id);
+    if (upErr) throw upErr;
+  }
+
+  // 4. Borra el movimiento de salida (cascade borra sus líneas).
+  const { error: dmErr } = await sb.from("inventory_movements").delete().eq("id", o.movement_id);
+  if (dmErr) throw dmErr;
+
+  // 5. Devuelve la orden a borrador, limpiando lo congelado al confirmar.
+  const { error: poErr } = await sb
+    .from("orders")
+    .update({
+      status: "borrador",
+      confirmed_by: null,
+      confirmed_at: null,
+      movement_id: null,
+      cogs_total: 0,
+      cogs_usd: 0,
+      sale_rate: null,
+      amount_usd: null,
+    })
+    .eq("id", id);
+  if (poErr) throw poErr;
+
+  bust();
+  revalidateTag("costing", "max");
 }
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {

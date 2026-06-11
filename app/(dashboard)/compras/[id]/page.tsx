@@ -20,6 +20,7 @@ import {
   cancelPurchaseOrderAction,
   deletePurchaseOrderAction,
   receivePurchaseOrderAction,
+  undoReceivePurchaseOrderAction,
   updatePurchaseOrderAction,
 } from "../actions";
 
@@ -105,6 +106,24 @@ export default async function CompraDetallePage({ params, searchParams }: { para
             <Link href="/inventario/movimientos" className="underline">ver historial</Link>
           </div>
         )}
+
+        {po.status === "recibida" && canDelete && (
+          <Card className="border-destructive/30">
+            <CardContent className="pt-6 flex flex-wrap gap-3 items-center justify-between">
+              <div>
+                <div className="font-medium">Anular recepción</div>
+                <div className="text-sm text-muted-foreground">
+                  Revierte el stock y la contabilidad y devuelve la orden a borrador (para corregirla o eliminarla).
+                  Solo si la mercancía no se ha vendido ni movido.
+                </div>
+              </div>
+              <form action={undoReceivePurchaseOrderAction.bind(null, po.id)}>
+                <Button type="submit" variant="destructive">Anular recepción</Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
         <div>
           <Button asChild variant="ghost"><Link href="/compras">← Volver</Link></Button>
         </div>
