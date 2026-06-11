@@ -70,7 +70,7 @@ tocar dinero. Reglas:
 - La **tasa USD→CUP se registra a mano cada día** en `/remesas/tasas`. Con más de
   `RATE_STALE_DAYS` (3) días de antigüedad las operaciones se **bloquean**: usa
   `assertFreshRate()` (TS) / `current_usd_rate_strict` (SQL).
-- Precios de venta CUP: múltiplo de 5 hacia arriba (`priceCupFromUsd`). Precios
+- Precios de venta CUP: conversión exacta USD×tasa al peso entero (`priceCupFromUsd`). Precios
   por moneda en `product_prices` (CUP/USD/EUR); `products.price` sigue siendo el
   precio USD del catálogo online.
 - Sin tasa registrada → mostrar `—`, **nunca asumir tasa 1**.

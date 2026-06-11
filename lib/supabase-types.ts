@@ -311,6 +311,7 @@ export type Database = {
           status: PurchaseOrderStatus;
           reference: string;
           notes: string;
+          paid_cash: boolean;
           total_amount: number;
           rate: number | null;
           total_usd: number | null;
@@ -329,6 +330,7 @@ export type Database = {
           status?: PurchaseOrderStatus;
           reference?: string;
           notes?: string;
+          paid_cash?: boolean;
           rate?: number | null;
           total_usd?: number | null;
           created_by?: string | null;
@@ -339,6 +341,7 @@ export type Database = {
           status?: PurchaseOrderStatus;
           reference?: string;
           notes?: string;
+          paid_cash?: boolean;
           rate?: number | null;
           total_usd?: number | null;
           received_by?: string | null;

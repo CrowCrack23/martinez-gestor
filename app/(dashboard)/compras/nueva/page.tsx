@@ -63,9 +63,18 @@ export default async function NuevaCompraPage({ searchParams }: { searchParams: 
                 </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="reference">Nº factura del proveedor</Label>
-              <Input id="reference" name="reference" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="reference">Nº factura del proveedor</Label>
+                <Input id="reference" name="reference" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="payment">Forma de pago *</Label>
+                <Select id="payment" name="payment" required defaultValue="credito">
+                  <option value="credito">A crédito (cuentas por pagar)</option>
+                  <option value="contado">De contado (sale de la caja del negocio)</option>
+                </Select>
+              </div>
             </div>
             <PurchaseLineEditor products={products} rate={rate && !rate.stale ? rate.rate : null} />
             <div className="space-y-2">

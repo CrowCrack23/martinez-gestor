@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth";
-import { listStoresLite } from "@/lib/stores-lite";
+import { listBusinessesLite } from "@/lib/businesses";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,7 @@ type SP = Promise<{ error?: string }>;
 
 export default async function NuevoAlmacenPage({ searchParams }: { searchParams: SP }) {
   await requirePermission("almacenes");
-  const [stores, sp] = await Promise.all([listStoresLite(), searchParams]);
+  const [businesses, sp] = await Promise.all([listBusinessesLite(), searchParams]);
   return (
     <div className="max-w-xl space-y-6">
       <div>
@@ -45,13 +45,14 @@ export default async function NuevoAlmacenPage({ searchParams }: { searchParams:
               <Input id="name" name="name" required placeholder="Almacén Miramar" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="store_slug">Tienda asociada (opcional)</Label>
-              <Select id="store_slug" name="store_slug" defaultValue="">
-                <option value="">— Ninguna —</option>
-                {stores.map((s) => (
-                  <option key={s.slug} value={s.slug}>{s.label}</option>
+              <Label htmlFor="store_slug">Negocio *</Label>
+              <Select id="store_slug" name="store_slug" required defaultValue="">
+                <option value="">— Selecciona —</option>
+                {businesses.map((b) => (
+                  <option key={b.slug} value={b.slug}>{b.label}</option>
                 ))}
               </Select>
+              <p className="text-xs text-muted-foreground">La mercancía y el dinero de las compras se atribuyen a este negocio.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="address">Dirección</Label>

@@ -51,6 +51,7 @@ export default async function CompraDetallePage({ params, searchParams }: { para
               <div><div className="text-muted-foreground text-xs">Proveedor</div><div>{po.supplier_name}</div></div>
               <div><div className="text-muted-foreground text-xs">Almacén destino</div><div>{po.warehouse_name}</div></div>
               <div><div className="text-muted-foreground text-xs">Nº factura</div><div>{po.reference || "—"}</div></div>
+              <div><div className="text-muted-foreground text-xs">Forma de pago</div><div>{po.paid_cash ? "De contado (caja del negocio)" : "A crédito (cuentas por pagar)"}</div></div>
               <div><div className="text-muted-foreground text-xs">Creada</div><div>{formatDateTime(po.created_at)}</div></div>
               {po.received_at && (
                 <div><div className="text-muted-foreground text-xs">Recibida</div><div>{formatDateTime(po.received_at)}</div></div>
@@ -144,9 +145,18 @@ export default async function CompraDetallePage({ params, searchParams }: { para
                 </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="reference">Nº factura del proveedor</Label>
-              <Input id="reference" name="reference" defaultValue={po.reference} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="reference">Nº factura del proveedor</Label>
+                <Input id="reference" name="reference" defaultValue={po.reference} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="payment">Forma de pago *</Label>
+                <Select id="payment" name="payment" required defaultValue={po.paid_cash ? "contado" : "credito"}>
+                  <option value="credito">A crédito (cuentas por pagar)</option>
+                  <option value="contado">De contado (sale de la caja del negocio)</option>
+                </Select>
+              </div>
             </div>
             <PurchaseLineEditor
               products={products}

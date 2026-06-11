@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { hasRole, requirePermission } from "@/lib/auth";
 import { getWarehouse, WAREHOUSE_TYPE_LABEL } from "@/lib/warehouses";
-import { listStoresLite } from "@/lib/stores-lite";
+import { listBusinessesLite } from "@/lib/businesses";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +18,7 @@ type SP = Promise<{ error?: string }>;
 export default async function EditarAlmacenPage({ params, searchParams }: { params: Params; searchParams: SP }) {
   const user = await requirePermission("almacenes");
   const { id } = await params;
-  const [warehouse, stores, sp] = await Promise.all([getWarehouse(id), listStoresLite(), searchParams]);
+  const [warehouse, businesses, sp] = await Promise.all([getWarehouse(id), listBusinessesLite(), searchParams]);
   if (!warehouse) notFound();
   const canDelete = hasRole(user, ["admin"]);
 
@@ -54,13 +54,14 @@ export default async function EditarAlmacenPage({ params, searchParams }: { para
               <Input id="name" name="name" required defaultValue={warehouse.name} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="store_slug">Tienda asociada</Label>
-              <Select id="store_slug" name="store_slug" defaultValue={warehouse.store_slug ?? ""}>
-                <option value="">— Ninguna —</option>
-                {stores.map((s) => (
-                  <option key={s.slug} value={s.slug}>{s.label}</option>
+              <Label htmlFor="store_slug">Negocio *</Label>
+              <Select id="store_slug" name="store_slug" required defaultValue={warehouse.store_slug ?? ""}>
+                <option value="">— Selecciona —</option>
+                {businesses.map((b) => (
+                  <option key={b.slug} value={b.slug}>{b.label}</option>
                 ))}
               </Select>
+              <p className="text-xs text-muted-foreground">La mercancía y el dinero de las compras se atribuyen a este negocio.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="address">Dirección</Label>

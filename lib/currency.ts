@@ -70,11 +70,12 @@ export async function assertFreshRate(): Promise<number> {
 }
 
 /**
- * Precio de venta en CUP desde el precio USD: múltiplo de 5 hacia arriba.
- * Espejo TS de product_price_cup (migración 0041).
+ * Precio de venta en CUP desde el precio USD: conversión exacta al peso entero
+ * (sin redondear a múltiplo de 5 — decisión del dueño).
+ * Espejo TS de product_price_cup (migración 0045).
  */
 export function priceCupFromUsd(usd: number, rate: number): number {
-  return Math.ceil((usd * rate) / 5) * 5;
+  return Math.round(usd * rate);
 }
 
 /** Equivalente USD congelando la tasa dada (redondeo a centavos). */

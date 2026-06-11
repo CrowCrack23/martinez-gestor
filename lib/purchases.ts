@@ -143,6 +143,8 @@ export type PurchaseOrderDetail = {
   warehouse_store: string | null;
   reference: string;
   notes: string;
+  /** true = pagada de contado (baja la caja del negocio); false = a crédito. */
+  paid_cash: boolean;
   total_amount: number;
   /** Tasa USD→CUP congelada al crear la orden. */
   rate: number | null;
@@ -159,7 +161,7 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
   const { data, error } = await sb
     .from("purchase_orders")
     .select(
-      "id,code,status,supplier_id,warehouse_id,reference,notes,total_amount,rate,total_usd,created_at,received_at,movement_id,suppliers!inner(name),warehouses!inner(name,store_slug)",
+      "id,code,status,supplier_id,warehouse_id,reference,notes,paid_cash,total_amount,rate,total_usd,created_at,received_at,movement_id,suppliers!inner(name),warehouses!inner(name,store_slug)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -204,6 +206,7 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
     warehouse_id: string;
     reference: string;
     notes: string;
+    paid_cash: boolean;
     total_amount: number;
     rate: number | null;
     total_usd: number | null;
@@ -225,6 +228,7 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
     warehouse_store: d.warehouses?.store_slug ?? null,
     reference: d.reference,
     notes: d.notes,
+    paid_cash: d.paid_cash ?? false,
     total_amount: Number(d.total_amount),
     rate: d.rate == null ? null : Number(d.rate),
     total_usd: d.total_usd == null ? null : Number(d.total_usd),
@@ -240,6 +244,8 @@ export async function createPurchaseOrder(input: {
   warehouse_id: string;
   reference: string;
   notes: string;
+  /** true = pagada de contado (baja la caja del negocio); false = a crédito. */
+  paid_cash: boolean;
   created_by: string | null;
   lines: PurchaseLineInput[];
 }): Promise<string> {
@@ -256,6 +262,7 @@ export async function createPurchaseOrder(input: {
       warehouse_id: input.warehouse_id,
       reference: input.reference,
       notes: input.notes,
+      paid_cash: input.paid_cash,
       rate,
       total_usd: totalUsd,
       created_by: input.created_by,
@@ -287,7 +294,7 @@ function round2(n: number): number {
 
 export async function updatePurchaseOrderHeader(
   id: string,
-  patch: { supplier_id?: string; warehouse_id?: string; reference?: string; notes?: string },
+  patch: { supplier_id?: string; warehouse_id?: string; reference?: string; notes?: string; paid_cash?: boolean },
 ): Promise<void> {
   const sb = getSupabase();
   // Solo se permite si está en borrador (validado en el server action)
@@ -369,6 +376,7 @@ export async function receivePurchaseOrder(id: string, userId: string): Promise<
     total: po.total_amount,
     totalUsd: po.total_usd,
     rate: po.rate,
+    paidCash: po.paid_cash,
     business: po.warehouse_store,
     date: new Date().toISOString().slice(0, 10),
     userId,

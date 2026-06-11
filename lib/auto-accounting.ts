@@ -112,6 +112,8 @@ export async function generatePurchaseEntry(input: {
   totalUsd?: number | null;
   /** Tasa USD→CUP congelada en la orden. */
   rate?: number | null;
+  /** true = pagada de contado (sale de la caja del negocio); false = a crédito (cuentas por pagar). */
+  paidCash?: boolean;
   business: string | null;
   date: string;
   userId: string | null;
@@ -119,13 +121,18 @@ export async function generatePurchaseEntry(input: {
   try {
     if (input.total <= 0) return;
     if (await entryExists("compra", input.purchaseId)) return;
-    const acc = await accountIdsByCode([ACC.inventario, ACC.cxp]);
+    // Contado: el haber sale de la caja del negocio (1110). Crédito: cuentas por pagar (2100).
+    const creditCode = input.paidCash ? ACC.cajaCup : ACC.cxp;
+    const acc = await accountIdsByCode([ACC.inventario, creditCode]);
     const total = round2(input.total);
     const rate = input.rate ?? (await softRate());
     const totalUsd = input.totalUsd != null ? round2(input.totalUsd) : rate ? round2(total / rate) : 0;
+    const creditDesc = input.paidCash
+      ? `Pago de contado a ${input.supplierName}`
+      : `Por pagar a ${input.supplierName}`;
     const lines: JournalLineInput[] = [
       { account_id: acc.get(ACC.inventario)!, debit: total, credit: 0, debit_usd: totalUsd, credit_usd: 0, description: "Inventario recibido" },
-      { account_id: acc.get(ACC.cxp)!, debit: 0, credit: total, debit_usd: 0, credit_usd: totalUsd, description: `Por pagar a ${input.supplierName}` },
+      { account_id: acc.get(creditCode)!, debit: 0, credit: total, debit_usd: 0, credit_usd: totalUsd, description: creditDesc },
     ];
     await createJournalEntry({
       entry_date: input.date,

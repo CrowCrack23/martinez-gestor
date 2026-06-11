@@ -26,7 +26,7 @@ export async function createWarehouseAction(formData: FormData) {
       code: requireString(formData, "code", "Código").toUpperCase(),
       name: requireString(formData, "name", "Nombre"),
       type: parseType(formData),
-      store_slug: optionalString(formData, "store_slug") || null,
+      store_slug: requireString(formData, "store_slug", "Negocio"),
       address: optionalString(formData, "address"),
     });
   } catch (e) {
@@ -43,7 +43,7 @@ export async function updateWarehouseAction(id: string, formData: FormData) {
       code: requireString(formData, "code", "Código").toUpperCase(),
       name: requireString(formData, "name", "Nombre"),
       type: parseType(formData),
-      store_slug: optionalString(formData, "store_slug") || null,
+      store_slug: requireString(formData, "store_slug", "Negocio"),
       address: optionalString(formData, "address"),
       active: formData.get("active") === "on",
     });

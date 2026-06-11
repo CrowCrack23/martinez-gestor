@@ -73,6 +73,7 @@ export async function createPurchaseOrderAction(formData: FormData) {
       warehouse_id: requireString(formData, "warehouse_id", "Almacén"),
       reference: optionalString(formData, "reference"),
       notes: optionalString(formData, "notes"),
+      paid_cash: formData.get("payment") === "contado",
       created_by: user.id,
       lines: parseLines(formData),
     });
@@ -92,6 +93,7 @@ export async function updatePurchaseOrderAction(id: string, formData: FormData) 
       warehouse_id: requireString(formData, "warehouse_id", "Almacén"),
       reference: optionalString(formData, "reference"),
       notes: optionalString(formData, "notes"),
+      paid_cash: formData.get("payment") === "contado",
     });
     await replacePurchaseOrderLines(id, parseLines(formData));
   } catch (e) {
