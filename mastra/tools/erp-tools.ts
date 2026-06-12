@@ -4,7 +4,7 @@ import { listOrders } from "@/lib/sales";
 import { listStock, listMovements, MOVEMENT_TYPE_LABEL } from "@/lib/inventory";
 import { stockValuation } from "@/lib/costing";
 import { listPurchaseOrders } from "@/lib/purchases";
-import { trialBalance } from "@/lib/accounting";
+import { trialBalance, incomeStatement } from "@/lib/accounting";
 import { listProductsLite } from "@/lib/products-lite";
 import { listRemittances } from "@/lib/remittances";
 import { listEmployees, listPayrollRuns } from "@/lib/hr";
@@ -12,6 +12,13 @@ import { listProductionOrders, listBoms } from "@/lib/production";
 import { listCustomers } from "@/lib/customers";
 import { listSuppliers } from "@/lib/suppliers";
 import { listWarehouses, WAREHOUSE_TYPE_LABEL } from "@/lib/warehouses";
+import { getCurrentRate, getRates } from "@/lib/currency";
+import { listBusinessesLite } from "@/lib/businesses";
+import { capitalSnapshot } from "@/lib/capital";
+import { holderBalances, HOLDER_KIND_LABEL, HOLDER_LOCATION_LABEL } from "@/lib/money-holders";
+import { listDailyClosures } from "@/lib/closures";
+import { listPartners, getGrowthPct } from "@/lib/partners";
+import { listDistributions } from "@/lib/profit-sharing";
 
 // Tools de SOLO LECTURA para el asistente del administrador. Envuelven las
 // funciones de lib/ ya existentes. Como el asistente es solo para el admin, el
@@ -320,6 +327,173 @@ export const proveedoresTool = createTool({
   },
 });
 
+export const tasaTool = createTool({
+  id: "tasa_actual",
+  description:
+    "Tasa de cambio del día. USD es la moneda funcional (rectora) del negocio: la tasa USD→CUP se registra a mano cada día. Devuelve la última tasa, su fecha, antigüedad y si está vencida (con >3 días las operaciones de compra/venta se bloquean). También la tasa EUR→CUP.",
+  inputSchema: z.object({}),
+  execute: async () => {
+    const [usd, rates] = await Promise.all([getCurrentRate(), getRates()]);
+    return {
+      usd_cup: usd ? usd.rate : null,
+      fecha: usd?.day ?? null,
+      antiguedad_dias: usd?.ageDays ?? null,
+      vencida: usd?.stale ?? null,
+      eur_cup: rates.EUR,
+      nota: usd
+        ? usd.stale
+          ? "La tasa está vencida (>3 días). Las compras/ventas se bloquean hasta registrar la tasa del día en /remesas/tasas."
+          : "Tasa vigente."
+        : "No hay tasa USD→CUP registrada. Regístrala en /remesas/tasas.",
+    };
+  },
+});
+
+export const resultadosTool = createTool({
+  id: "contabilidad_resultados",
+  description:
+    "Estado de resultados (ganancias y pérdidas) en un rango de fechas: ingresos, gastos y utilidad neta, en CUP y en USD (la utilidad en USD es la real, congelada por transacción). Filtra por negocio opcional (slug, p.ej. 'ropa' o 'remesas'). Por defecto solo asientos contabilizados y los últimos 30 días.",
+  inputSchema: z.object({
+    desde: z.string().describe("YYYY-MM-DD").optional(),
+    hasta: z.string().describe("YYYY-MM-DD").optional(),
+    negocio: z.string().describe("slug del negocio; vacío = consolidado").optional(),
+    incluir_borradores: z.boolean().optional(),
+  }),
+  execute: async ({ desde, hasta, negocio, incluir_borradores }) => {
+    const pl = await incomeStatement({
+      from: desde ?? daysAgoISO(30),
+      to: hasta ?? todayISO(),
+      business: negocio,
+      postedOnly: !incluir_borradores,
+    });
+    return {
+      desde: desde ?? daysAgoISO(30),
+      hasta: hasta ?? todayISO(),
+      negocio: negocio ?? "consolidado",
+      ingresos_cup: pl.totalIncome,
+      gastos_cup: pl.totalExpense,
+      utilidad_cup: pl.netIncome,
+      ingresos_usd: pl.totalIncomeUsd,
+      gastos_usd: pl.totalExpenseUsd,
+      utilidad_usd: pl.netIncomeUsd,
+    };
+  },
+});
+
+export const capitalTool = createTool({
+  id: "capital_resumen",
+  description:
+    "Dónde está el capital de un negocio en este momento: efectivo, inventario valuado, cuentas por cobrar/pagar e infraestructura, con el total en USD (moneda rectora) y CUP. Requiere el slug del negocio (usa negocios_listar si no lo conoces).",
+  inputSchema: z.object({
+    negocio: z.string().describe("slug del negocio (p.ej. 'mipyme', 'ropa')"),
+  }),
+  execute: async ({ negocio }) => {
+    const s = await capitalSnapshot(negocio);
+    return {
+      negocio,
+      capital_total_usd: s.capitalTotalUsd,
+      capital_total_cup: s.capitalTotal,
+      efectivo_cup: s.cash.total,
+      efectivo_usd: s.cash.totalUsd,
+      inventario_cup: s.inventory.total,
+      inventario_usd: s.inventory.totalUsd,
+      cuentas_por_cobrar_cup: s.receivables,
+      cuentas_por_pagar_cup: s.payables,
+      infraestructura_cup: s.infrastructure,
+      aportado_por_socios_cup: s.contributed.total,
+    };
+  },
+});
+
+export const dineroRemesasTool = createTool({
+  id: "remesas_dinero",
+  description:
+    "Quién tiene el dinero del negocio de remesas en cada momento: mensajeros con efectivo pendiente, deudores y cajas, con saldos por moneda y totales allá (origen) vs acá (Cuba). Negocio: 'remesas_eeuu' (USD) o 'remesas_europa' (EUR).",
+  inputSchema: z.object({
+    negocio: z.enum(["remesas_eeuu", "remesas_europa"]).optional(),
+  }),
+  execute: async ({ negocio }) => {
+    const business = negocio ?? "remesas_eeuu";
+    const overview = await holderBalances(business);
+    return {
+      negocio: business,
+      por_ubicacion: {
+        alla: overview.byLocation.alla,
+        aca: overview.byLocation.aca,
+      },
+      tenedores: overview.holders
+        .filter((h) => Object.values(h.balances).some((v) => v && Math.abs(v) >= 0.01))
+        .map((h) => ({
+          nombre: h.holder.name,
+          tipo: HOLDER_KIND_LABEL[h.holder.kind],
+          ubicacion: HOLDER_LOCATION_LABEL[h.holder.location],
+          saldos: h.balances,
+        })),
+    };
+  },
+});
+
+export const cuadresTool = createTool({
+  id: "cuadres_recientes",
+  description:
+    "Cuadres diarios confirmados de los puntos de venta: ventas, ganancia, comisión del trabajador y desglose del dinero (efectivo / transferencia / USD) por día.",
+  inputSchema: z.object({ limite: z.number().int().min(1).max(60).optional() }),
+  execute: async ({ limite }) => {
+    const rows = await listDailyClosures({ limit: limite ?? 20 });
+    return {
+      cantidad: rows.length,
+      cuadres: rows.map((c) => ({
+        dia: c.day,
+        punto: c.warehouse_name,
+        ventas_cup: c.revenue_cup,
+        ganancia_cup: c.profit_cup,
+        comision_cup: c.commission_cup,
+        efectivo_cup: c.cash_cup,
+        transferencia_cup: c.transfer_cup,
+        usd: c.usd_total,
+      })),
+    };
+  },
+});
+
+export const sociosTool = createTool({
+  id: "socios_reparto",
+  description:
+    "Socios de un negocio con su % fijo de la ganancia, el % de crecimiento que se reinvierte, y el historial de repartos mensuales con su estado (calculada / pagada). Requiere el slug del negocio.",
+  inputSchema: z.object({
+    negocio: z.string().describe("slug del negocio (p.ej. 'mipyme', 'remesas_europa')"),
+  }),
+  execute: async ({ negocio }) => {
+    const [partners, growthPct, distributions] = await Promise.all([
+      listPartners(negocio),
+      getGrowthPct(negocio),
+      listDistributions(negocio),
+    ]);
+    return {
+      negocio,
+      crecimiento_empresa_pct: growthPct,
+      socios: partners.map((p) => ({ nombre: p.name, porcentaje: p.profit_pct, activo: p.active })),
+      repartos: distributions.slice(0, 12).map((d) => ({
+        mes: d.period_month.slice(0, 7),
+        ganancia_base_cup: d.base_profit,
+        a_repartir_cup: d.distributable,
+        estado: d.status,
+      })),
+    };
+  },
+});
+
+export const negociosTool = createTool({
+  id: "negocios_listar",
+  description:
+    "Lista los negocios (dimensión contable): tiendas y remesas, con su slug, nombre y tipo. Usa los slugs para las demás herramientas (capital, resultados, socios).",
+  inputSchema: z.object({}),
+  execute: async () => {
+    const list = await listBusinessesLite();
+    return { negocios: list.map((b) => ({ slug: b.slug, nombre: b.label, tipo: b.kind })) };
+  },
+});
+
 // ── Guía / navegación de la app ─────────────────────────────────────────────
 
 const APP_MAP: { modulo: string; ruta: string; descripcion: string }[] = [
@@ -331,16 +505,22 @@ const APP_MAP: { modulo: string; ruta: string; descripcion: string }[] = [
   { modulo: "Almacenes", ruta: "/almacenes", descripcion: "Tiendas/almacenes (negocios)." },
   { modulo: "Proveedores", ruta: "/proveedores", descripcion: "Gestión de proveedores." },
   { modulo: "Compras", ruta: "/compras/nueva", descripcion: "Orden de compra; al recibir, suma stock y genera asiento contable." },
-  { modulo: "Ventas", ruta: "/ventas/nueva", descripcion: "Venta (POS/online); al confirmar, descuenta stock y genera asiento." },
+  { modulo: "Ventas", ruta: "/ventas/nueva", descripcion: "Venta (POS/online); al confirmar, descuenta stock y genera asiento. Una venta confirmada se puede anular desde su detalle (solo admin)." },
+  { modulo: "Cuadres", ruta: "/cuadres", descripcion: "Cuadre diario del punto de venta: ventas del día, comisión del trabajador y desglose del dinero. /cuadres/semanal para el reporte semanal." },
+  { modulo: "Puntos de venta", ruta: "/puntos-venta", descripcion: "Personal asignado a cada punto de venta y su % de comisión." },
   { modulo: "Clientes", ruta: "/clientes", descripcion: "Gestión de clientes." },
   { modulo: "Empleados", ruta: "/empleados", descripcion: "Personal, posiciones y salarios." },
   { modulo: "Asistencia", ruta: "/asistencia", descripcion: "Marcar presencia y horas por día." },
   { modulo: "Nómina", ruta: "/nomina/nuevo", descripcion: "Crear período de nómina; calcula sueldos según asistencia." },
   { modulo: "Recetas", ruta: "/recetas", descripcion: "Recetas (BOM): insumos por producto terminado." },
   { modulo: "Producción", ruta: "/produccion/nueva", descripcion: "Orden de producción; consume insumos y produce terminado." },
-  { modulo: "Remesas", ruta: "/remesas/nueva", descripcion: "Registrar remesa USD→CUP. Tasas en /remesas/tasas." },
-  { modulo: "Contabilidad", ruta: "/contabilidad", descripcion: "Plan de cuentas, asientos y balance." },
+  { modulo: "Remesas", ruta: "/remesas/nueva", descripcion: "Registrar remesa. Tasas del día en /remesas/tasas; quién tiene el dinero en /remesas/dinero; cuadre semanal en /remesas/cuadre." },
+  { modulo: "Tasas de cambio", ruta: "/remesas/tasas", descripcion: "Registrar a mano la tasa USD→CUP del día. Sin tasa fresca, compras y ventas se bloquean." },
+  { modulo: "Contabilidad", ruta: "/contabilidad", descripcion: "Plan de cuentas, asientos y balance. Estado de resultados (P&L) en /contabilidad/resultados." },
+  { modulo: "Capital", ruta: "/capital", descripcion: "Dónde está el capital del negocio: efectivo, inventario, CxC/CxP e infraestructura. También registrar ingresos/gastos manuales." },
+  { modulo: "Socios", ruta: "/socios", descripcion: "Socios por negocio con su % de ganancia. Aportes en /socios/aportes; reparto mensual en /socios/reparto." },
   { modulo: "Usuarios", ruta: "/usuarios", descripcion: "Usuarios, roles y negocios asignados." },
+  { modulo: "Asistente", ruta: "/asistente", descripcion: "Este asistente (solo admin)." },
 ];
 
 export const navegacionTool = createTool({
@@ -372,5 +552,12 @@ export const erpTools = {
   produccionTool,
   clientesTool,
   proveedoresTool,
+  tasaTool,
+  resultadosTool,
+  capitalTool,
+  dineroRemesasTool,
+  cuadresTool,
+  sociosTool,
+  negociosTool,
   navegacionTool,
 };

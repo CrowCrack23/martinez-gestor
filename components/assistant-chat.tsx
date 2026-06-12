@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { AI_PROVIDERS, DEFAULT_PROVIDER, type ProviderId } from "@/lib/ai-providers";
+import { AI_PROVIDERS, DEFAULT_PROVIDER, getModels, defaultModel, type ProviderId } from "@/lib/ai-providers";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -20,7 +20,13 @@ export function AssistantChat() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [provider, setProvider] = useState<ProviderId>(DEFAULT_PROVIDER);
+  const [model, setModel] = useState<string>(defaultModel(DEFAULT_PROVIDER));
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  function changeProvider(p: ProviderId) {
+    setProvider(p);
+    setModel(defaultModel(p)); // al cambiar de proveedor, vuelve a su modelo por defecto
+  }
 
   async function send(text: string) {
     const content = text.trim();
@@ -34,7 +40,7 @@ export function AssistantChat() {
       const res = await fetch("/api/asistente", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next, provider }),
+        body: JSON.stringify({ messages: next, provider, model }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error del asistente.");
@@ -103,12 +109,22 @@ export function AssistantChat() {
       >
         <select
           value={provider}
-          onChange={(e) => setProvider(e.target.value as ProviderId)}
+          onChange={(e) => changeProvider(e.target.value as ProviderId)}
           aria-label="Proveedor de IA"
           className="h-10 shrink-0 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {AI_PROVIDERS.map((p) => (
             <option key={p.id} value={p.id}>{p.label}</option>
+          ))}
+        </select>
+        <select
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          aria-label="Modelo de IA"
+          className="h-10 shrink-0 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {getModels(provider).map((m) => (
+            <option key={m.id} value={m.id}>{m.label}</option>
           ))}
         </select>
         <textarea

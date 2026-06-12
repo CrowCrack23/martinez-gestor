@@ -185,8 +185,9 @@ proxy.ts                         # gate de auth (todas las rutas excepto /login)
 
 ### Asistente IA (Mastra, solo admin, solo lectura)
 
-Chat en `/asistente` que consulta los datos reales del ERP vía 15 tools (ventas, inventario,
-compras, contabilidad, remesas, RRHH, producción…) + guía de navegación. Multi-proveedor:
+Chat en `/asistente` que consulta los datos reales del ERP vía 22 tools (ventas, cuadres,
+inventario, compras, contabilidad y P&L, capital, remesas y su dinero, socios, tasa del día,
+RRHH, producción…) + guía de navegación. Multi-proveedor:
 **OpenAI / Anthropic / Google** (se elige en la UI). Configura al menos una API key en
 `.env.local` (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY`).
 ⚠️ OpenAI y Google bloquean IPs cubanas — el servidor debe estar fuera de Cuba.
