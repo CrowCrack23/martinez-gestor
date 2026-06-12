@@ -282,8 +282,8 @@ export async function confirmDailyClosure(warehouseId: string, day: string, user
  * Reabre un cuadre diario confirmado: anula el asiento de comisión que generó y
  * borra el snapshot, dejando el día como antes del cuadre. Los asientos de venta
  * (respaldo de las ventas, idempotentes) NO se tocan: pertenecen a las ventas,
- * no al cuadre, y se regeneran sin duplicar al reconfirmar. Aborta si la
- * comisión ya está contabilizada.
+ * no al cuadre, y se regeneran sin duplicar al reconfirmar. Descontabiliza la
+ * comisión si estaba contabilizada.
  */
 export async function reopenDailyClosure(warehouseId: string, day: string): Promise<void> {
   const sb = getSupabase();
@@ -295,7 +295,7 @@ export async function reopenDailyClosure(warehouseId: string, day: string): Prom
     .maybeSingle();
   if (error) throw error;
   if (!closure) throw new Error("No hay un cuadre confirmado para ese día.");
-  // Anula la comisión (reference_type='cuadre'); lanza si está contabilizada.
+  // Anula la comisión (reference_type='cuadre'); la descontabiliza si lo estaba.
   await deleteEntriesByReference("cuadre", closure.id);
   const { error: dErr } = await sb.from("daily_closures").delete().eq("id", closure.id);
   if (dErr) throw dErr;

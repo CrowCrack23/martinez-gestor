@@ -178,8 +178,8 @@ export async function confirmWeeklyClosure(business: string, weekStart: string, 
 /**
  * Reabre un cuadre semanal de remesas confirmado: anula el asiento de pago a
  * mensajeros y los asientos de reparto a socios ya pagados, y borra el cuadre
- * (las líneas de socio caen en cascada). Aborta si algún asiento ya está
- * contabilizado.
+ * (las líneas de socio caen en cascada). Descontabiliza los asientos que
+ * estuvieran contabilizados.
  */
 export async function reopenWeeklyClosure(business: string, weekStart: string): Promise<void> {
   const sb = getSupabase();

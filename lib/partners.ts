@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
-import { createJournalEntry, deleteJournalEntry } from "./accounting";
+import { createJournalEntry, forceDeleteJournalEntry } from "./accounting";
 import { assertFreshRate } from "./currency";
 import type { Database } from "./supabase-types";
 
@@ -229,9 +229,8 @@ export async function addContribution(input: {
 }
 
 /**
- * Elimina un aporte de capital registrado por error y reversa su asiento. Si el
- * asiento ya está contabilizado, `deleteJournalEntry` lanza y se aborta (hay que
- * reversarlo en Contabilidad primero).
+ * Elimina un aporte de capital registrado por error y su asiento (lo
+ * descontabiliza si estaba contabilizado).
  */
 export async function deleteContribution(id: string): Promise<void> {
   const sb = getSupabase();
@@ -242,7 +241,7 @@ export async function deleteContribution(id: string): Promise<void> {
     .maybeSingle();
   if (error) throw error;
   if (!c) return;
-  if (c.journal_entry_id) await deleteJournalEntry(c.journal_entry_id);
+  if (c.journal_entry_id) await forceDeleteJournalEntry(c.journal_entry_id);
   const { error: dErr } = await sb.from("capital_contributions").delete().eq("id", id);
   if (dErr) throw dErr;
   bust();

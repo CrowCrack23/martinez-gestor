@@ -164,8 +164,8 @@ export async function confirmDistribution(
 
 /**
  * Reabre un reparto mensual confirmado: anula los asientos de pago a socios ya
- * registrados y borra el reparto (las líneas caen en cascada). Aborta si algún
- * asiento ya está contabilizado.
+ * registrados y borra el reparto (las líneas caen en cascada). Descontabiliza
+ * los asientos que estuvieran contabilizados.
  */
 export async function reopenDistribution(business: string, month: string): Promise<void> {
   const { periodMonth } = monthRange(month);

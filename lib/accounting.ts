@@ -253,9 +253,23 @@ export async function deleteJournalEntry(id: string) {
 }
 
 /**
+ * Borra un asiento SIN importar si está contabilizado (lo descontabiliza al
+ * borrarlo). Solo para los flujos de anulación que revierten toda la operación
+ * (anular recepción/confirmación, reabrir cierres): ahí el asiento se elimina
+ * junto con lo que lo originó. El borrado manual de /contabilidad sigue usando
+ * `deleteJournalEntry`, que sí protege los contabilizados.
+ */
+export async function forceDeleteJournalEntry(id: string): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb.from("journal_entries").delete().eq("id", id);
+  if (error) throw error;
+  bust();
+}
+
+/**
  * Borra todos los asientos generados para una referencia (p.ej. la comisión de
- * un cuadre). Lanza si alguno está contabilizado (hay que reversarlo a mano
- * primero), dejando el resto intacto. Para reabrir cierres/repartos.
+ * un cuadre), estén en borrador o contabilizados. Para anular/reabrir
+ * operaciones completas; descontabiliza al borrar.
  */
 export async function deleteEntriesByReference(referenceType: string, referenceId: string): Promise<void> {
   const sb = getSupabase();
@@ -265,7 +279,7 @@ export async function deleteEntriesByReference(referenceType: string, referenceI
     .eq("reference_type", referenceType)
     .eq("reference_id", referenceId);
   if (error) throw error;
-  for (const e of data ?? []) await deleteJournalEntry(e.id);
+  for (const e of data ?? []) await forceDeleteJournalEntry(e.id);
 }
 
 // ── Trial balance ────────────────────────────────────────────────────────

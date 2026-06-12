@@ -400,7 +400,7 @@ export async function deleteOrder(id: string): Promise<void> {
  * Anula la confirmación de una venta confirmada por error: devuelve a su lote
  * cada unidad consumida por FIFO, repone el stock, borra el asiento de venta y
  * el movimiento de salida, y deja la orden en borrador (para corregir o
- * eliminar). Aborta sin tocar nada si el asiento de venta ya está contabilizado.
+ * eliminar). Descontabiliza el asiento de venta si estaba contabilizado.
  */
 export async function undoConfirmOrder(id: string): Promise<void> {
   const sb = getSupabase();
@@ -409,7 +409,7 @@ export async function undoConfirmOrder(id: string): Promise<void> {
   if (o.status !== "confirmada") throw new Error("Solo se puede anular la confirmación de una venta confirmada.");
   if (!o.movement_id) throw new Error("La venta no tiene movimiento de inventario asociado.");
 
-  // 1. Borra el asiento de venta (lanza si está contabilizado → no se toca nada más).
+  // 1. Borra el asiento de venta (lo descontabiliza si estaba contabilizado).
   await deleteEntriesByReference("venta", o.id);
 
   // 2. Devuelve a cada lote las unidades que esta salida consumió por FIFO.

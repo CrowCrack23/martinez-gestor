@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
-import { createJournalEntry, deleteJournalEntry, trialBalance } from "./accounting";
+import { createJournalEntry, forceDeleteJournalEntry, trialBalance } from "./accounting";
 import { stockValuation } from "./costing";
 import { listWarehouses } from "./warehouses";
 import { getRate, assertFreshRate } from "./currency";
@@ -241,9 +241,8 @@ export async function addFixedAsset(input: {
 }
 
 /**
- * Elimina una inversión en infraestructura registrada por error y reversa su
- * asiento asociado. Si el asiento ya está contabilizado, `deleteJournalEntry`
- * lanza y se aborta el borrado (hay que reversarlo en Contabilidad primero).
+ * Elimina una inversión en infraestructura registrada por error y su asiento
+ * asociado (lo descontabiliza si estaba contabilizado).
  */
 export async function deleteFixedAsset(id: string): Promise<void> {
   const sb = getSupabase();
@@ -254,8 +253,7 @@ export async function deleteFixedAsset(id: string): Promise<void> {
     .maybeSingle();
   if (error) throw error;
   if (!asset) return;
-  // Primero el asiento (lanza si está contabilizado → no se borra el activo).
-  if (asset.journal_entry_id) await deleteJournalEntry(asset.journal_entry_id);
+  if (asset.journal_entry_id) await forceDeleteJournalEntry(asset.journal_entry_id);
   const { error: dErr } = await sb.from("fixed_assets").delete().eq("id", id);
   if (dErr) throw dErr;
   bust();
@@ -370,10 +368,10 @@ export const listCashMovements = unstable_cache(
 );
 
 /**
- * Elimina un ingreso/gasto manual = borra su asiento. `deleteJournalEntry`
- * bloquea si ya está contabilizado.
+ * Elimina un ingreso/gasto manual = borra su asiento (lo descontabiliza si
+ * estaba contabilizado).
  */
 export async function deleteCashMovement(entryId: string): Promise<void> {
-  await deleteJournalEntry(entryId);
+  await forceDeleteJournalEntry(entryId);
   bust();
 }

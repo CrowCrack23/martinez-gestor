@@ -414,10 +414,10 @@ export async function deletePurchaseOrder(id: string): Promise<void> {
 
 /**
  * Anula la recepción de una orden recibida por error: revierte el stock, borra
- * los lotes y el asiento de compra, y devuelve la orden a borrador (así se puede
- * editar o eliminar). Solo es seguro si la mercancía recibida NO se ha vendido ni
- * movido (lotes intactos); si no, hay que corregir con un ajuste de inventario.
- * Aborta sin tocar nada si el asiento de compra ya está contabilizado.
+ * los lotes y el asiento de compra (lo descontabiliza si estaba contabilizado),
+ * y devuelve la orden a borrador (así se puede editar o eliminar). Solo es
+ * seguro si la mercancía recibida NO se ha vendido ni movido (lotes intactos);
+ * si no, hay que corregir con un ajuste de inventario.
  */
 export async function undoReceivePurchaseOrder(id: string): Promise<void> {
   const sb = getSupabase();
@@ -438,7 +438,7 @@ export async function undoReceivePurchaseOrder(id: string): Promise<void> {
     }
   }
 
-  // 2. Borra el asiento de compra (lanza si está contabilizado → no se toca nada más).
+  // 2. Borra el asiento de compra (lo descontabiliza si estaba contabilizado).
   await deleteEntriesByReference("compra", po.id);
 
   // 3. Revierte el stock del almacén destino (el trigger solo aplica en alta, no

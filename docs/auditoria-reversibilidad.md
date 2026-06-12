@@ -70,14 +70,14 @@ generó efectos colaterales (stock, lotes, contabilidad) necesita una
   (botón Eliminar en `/socios/aportes`).
 - #4 ingreso/gasto de caja: no hay tabla propia, cada uno ES un asiento
   `reference_type='mov_caja'`. `listCashMovements` los lista en `/capital` y
-  `deleteCashMovement` borra el asiento. Ambos bloquean si está contabilizado.
+  `deleteCashMovement` borra el asiento (descontabiliza si hace falta).
 
 **Fase 3 — reapertura de cierres. ✅ Hecho.**
 
 Reglas decididas por el cliente: **solo admin** puede reabrir, y al reabrir se
 **anulan automáticamente** los asientos generados y se borran los pagos (queda
-como antes del cierre). Si algún asiento ya está *contabilizado*, la reapertura
-**aborta** (hay que reversarlo en Contabilidad primero).
+como antes del cierre). Si un asiento ya estaba *contabilizado*, se
+**descontabiliza y se borra** igual (ver "Regla de asientos contabilizados").
 
 - #6 `reopenDailyClosure` (`/cuadres`): anula la comisión (`reference_type='cuadre'`)
   y borra el snapshot. Los respaldos de venta (idempotentes, son de las ventas)
@@ -90,12 +90,21 @@ como antes del cierre). Si algún asiento ya está *contabilizado*, la reapertur
 
 Helper común nuevo: `deleteEntriesByReference(type, id)` en `lib/accounting.ts`.
 
+### Regla de asientos contabilizados (decisión del cliente)
+
+Al **anular/reabrir una operación completa** (compra, venta, cierre, reparto,
+aporte, activo fijo, ingreso/gasto), el asiento se **descontabiliza y se borra**
+aunque estuviera contabilizado — el cliente necesita "darle para atrás" sin
+trabarse. Esto lo hacen `forceDeleteJournalEntry` y `deleteEntriesByReference`.
+El **borrado manual** de un asiento suelto en `/contabilidad` (`deleteJournalEntry`)
+**sí** sigue bloqueando los contabilizados.
+
 **Fase 4 — anular recepción/confirmación (corrección #9/#10).**
 - #9 Compras: ✅ `undoReceivePurchaseOrder` (`/compras/[id]`). Solo admin. Revierte
-  stock, borra lotes y asiento, devuelve a borrador. Bloquea si la mercancía ya
-  se vendió/movió (lotes consumidos) o si el asiento está contabilizado.
+  stock, borra lotes y asiento (descontabiliza si hace falta), devuelve a borrador.
+  Solo bloquea si la mercancía ya se vendió/movió (lotes consumidos).
 - #10 Ventas: ✅ `undoConfirmOrder` (`/ventas/[id]`). Solo admin. Devuelve los
   lotes consumidos (`inventory_lot_consumptions`), repone stock, borra asiento de
-  venta y movimiento, y vuelve a borrador. Bloquea si el asiento está contabilizado.
+  venta y movimiento (descontabiliza si hace falta), y vuelve a borrador.
 
 **Mejora aparte:** botón de "ajuste inverso" guiado en movimientos de inventario.
