@@ -60,7 +60,7 @@ export function ProductForm({
         <div className="space-y-2">
           <Label htmlFor="price">Precio (USD) *</Label>
           <Input
-            id="price" name="price" type="number" step="0.01" min="0" required
+            id="price" name="price" type="number" step="any" min="0" required
             value={priceUsd}
             onChange={(e) => setPriceUsd(e.target.value)}
           />
@@ -77,12 +77,12 @@ export function ProductForm({
         </div>
         <div className="space-y-2">
           <Label htmlFor="price_eur">Precio (EUR)</Label>
-          <Input id="price_eur" name="price_eur" type="number" step="0.01" min="0" defaultValue={initial?.price_eur ?? ""} />
+          <Input id="price_eur" name="price_eur" type="number" step="any" min="0" defaultValue={initial?.price_eur ?? ""} />
           <p className="text-xs text-muted-foreground">Solo tienda online en euros.</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="old_price">Precio anterior (opcional)</Label>
-          <Input id="old_price" name="old_price" type="number" step="0.01" min="0" defaultValue={initial?.old_price ?? ""} />
+          <Input id="old_price" name="old_price" type="number" step="any" min="0" defaultValue={initial?.old_price ?? ""} />
         </div>
       </div>
 

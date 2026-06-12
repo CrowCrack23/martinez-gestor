@@ -21,6 +21,16 @@ export function formatPrice(n: number): string {
   return PRICE_FMT.format(n);
 }
 
+const UNIT_FMT = new Intl.NumberFormat("es-CU", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 6, // costos/precios unitarios: muestra hasta 6 decimales
+});
+
+/** Formatea un costo/precio UNITARIO conservando sus decimales (2 a 6). */
+export function formatUnit(n: number): string {
+  return UNIT_FMT.format(n);
+}
+
 export function formatDateTime(d: string | Date): string {
   return DATETIME_FMT.format(typeof d === "string" ? new Date(d) : d);
 }

@@ -99,7 +99,7 @@ export default async function LotesPage({ searchParams }: { searchParams: SP }) 
                       <form action={setOpeningLotCostAction} className="flex items-center justify-end gap-1">
                         <input type="hidden" name="lot_id" value={l.id} />
                         <input
-                          type="number" name="unit_cost" step="0.01" min="0" defaultValue={l.unit_cost}
+                          type="number" name="unit_cost" step="any" min="0" defaultValue={l.unit_cost}
                           className="h-8 w-24 rounded-md border border-input bg-background px-2 text-right font-mono"
                         />
                         <Button type="submit" size="sm" variant="secondary">Guardar</Button>

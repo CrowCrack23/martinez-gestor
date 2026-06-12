@@ -17,7 +17,7 @@ function parsePrice(form: FormData, key: string, label: string, required: boolea
   }
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0) throw new ValidationError(`${label} inválido.`);
-  return Math.round(n * 100) / 100;
+  return Math.round(n * 1e6) / 1e6; // precios: hasta 6 decimales (sin redondeo a centavos)
 }
 
 function parseInput(form: FormData): ProductInput {

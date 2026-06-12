@@ -21,6 +21,11 @@ export function bustCosting() {
   revalidateTag(TAG, "max");
 }
 
+/** Redondeo de costos unitarios a 6 decimales (sin redondear a centavos). */
+function round6(n: number): number {
+  return Math.round(n * 1e6) / 1e6;
+}
+
 export type Lot = {
   id: string;
   product_id: string;
@@ -55,8 +60,8 @@ export async function createLot(input: {
   const { error } = await sb.from("inventory_lots").insert({
     product_id: input.product_id,
     warehouse_id: input.warehouse_id,
-    unit_cost: Math.round(Math.max(0, input.unit_cost) * 100) / 100,
-    unit_cost_usd: Math.round(Math.max(0, input.unit_cost_usd) * 100) / 100,
+    unit_cost: round6(Math.max(0, input.unit_cost)),
+    unit_cost_usd: round6(Math.max(0, input.unit_cost_usd)),
     rate: input.rate ?? null,
     qty_received: input.quantity,
     qty_remaining: input.quantity,
@@ -277,8 +282,8 @@ export async function setOpeningLotCost(lotId: string, unitCost: number): Promis
   const { error: uErr } = await sb
     .from("inventory_lots")
     .update({
-      unit_cost: Math.round(unitCost * 100) / 100,
-      unit_cost_usd: Math.round((unitCost / rate) * 100) / 100,
+      unit_cost: round6(unitCost),
+      unit_cost_usd: round6(unitCost / rate),
       rate,
     })
     .eq("id", lotId);

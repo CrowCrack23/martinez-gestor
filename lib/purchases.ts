@@ -276,8 +276,8 @@ export async function createPurchaseOrder(input: {
     purchase_order_id: po.id,
     product_id: l.product_id,
     quantity: l.quantity,
-    unit_cost: round2(l.unit_cost_usd * rate),
-    unit_cost_usd: round2(l.unit_cost_usd),
+    unit_cost: round6(l.unit_cost_usd * rate),
+    unit_cost_usd: round6(l.unit_cost_usd),
     position: i,
   }));
   const { error: lErr } = await sb.from("purchase_order_lines").insert(payload);
@@ -291,6 +291,11 @@ export async function createPurchaseOrder(input: {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/** Costos/precios UNITARIOS a 6 decimales (los totales siguen a 2). */
+function round6(n: number): number {
+  return Math.round(n * 1e6) / 1e6;
 }
 
 export async function updatePurchaseOrderHeader(
@@ -320,8 +325,8 @@ export async function replacePurchaseOrderLines(
     purchase_order_id: id,
     product_id: l.product_id,
     quantity: l.quantity,
-    unit_cost: round2(l.unit_cost_usd * rate),
-    unit_cost_usd: round2(l.unit_cost_usd),
+    unit_cost: round6(l.unit_cost_usd * rate),
+    unit_cost_usd: round6(l.unit_cost_usd),
     position: i,
   }));
   const { error } = await sb.from("purchase_order_lines").insert(payload);

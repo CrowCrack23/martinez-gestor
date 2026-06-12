@@ -73,6 +73,10 @@ tocar dinero. Reglas:
 - Precios de venta CUP: conversión exacta USD×tasa al peso entero (`priceCupFromUsd`). Precios
   por moneda en `product_prices` (CUP/USD/EUR); `products.price` sigue siendo el
   precio USD del catálogo online.
+- **Precisión dual (migración 0045):** los **costos/precios UNITARIOS** se guardan
+  con **6 decimales** (`numeric(18,6)`; helper `round6`, inputs `step="any"`,
+  display `formatUnit`). Los **totales/COGS/asientos** siguen a **2 decimales**
+  (son montos de dinero). Las **cantidades siguen enteras**.
 - Sin tasa registrada → mostrar `—`, **nunca asumir tasa 1**.
 
 ## Asistente IA (Mastra, solo admin, solo lectura)

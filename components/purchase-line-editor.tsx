@@ -134,7 +134,7 @@ export function PurchaseLineEditor({
                   placeholder="Cant."
                 />
                 <Input
-                  type="number" step="0.01" min={0} name="unit_cost_usd" required
+                  type="number" step="any" min={0} name="unit_cost_usd" required
                   value={r.unit_cost_usd}
                   onChange={(e) => patch(r.uid, { unit_cost_usd: e.target.value })}
                   placeholder="Costo USD"
@@ -158,7 +158,7 @@ export function PurchaseLineEditor({
                 <div className="grid grid-cols-[110px_1fr_1fr] gap-2 items-center text-xs">
                   <div className="text-muted-foreground pl-1">Producto nuevo:</div>
                   <Input
-                    type="number" step="0.01" min={0} name="new_price_usd"
+                    type="number" step="any" min={0} name="new_price_usd"
                     placeholder="Precio de venta USD (opcional)"
                     value={r.new_price_usd}
                     onChange={(e) => patch(r.uid, { new_price_usd: e.target.value })}

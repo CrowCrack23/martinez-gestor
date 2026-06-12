@@ -17,7 +17,7 @@ function parseOptionalPrice(raw: string, label: string, line: number): number | 
   if (raw.trim() === "") return null;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0) throw new ValidationError(`${label} inválido en línea ${line}.`);
-  return Math.round(n * 100) / 100;
+  return Math.round(n * 1e6) / 1e6; // precios/costos unitarios: hasta 6 decimales
 }
 
 function parseLines(form: FormData): PurchaseLineInput[] {

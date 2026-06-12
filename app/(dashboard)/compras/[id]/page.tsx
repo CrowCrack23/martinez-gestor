@@ -15,7 +15,7 @@ import { Flash } from "@/components/flash";
 import { PurchaseLineEditor } from "@/components/purchase-line-editor";
 import { RateBanner } from "@/components/rate-banner";
 import { getCurrentRate } from "@/lib/currency";
-import { formatDateTime, formatPrice } from "@/lib/format";
+import { formatDateTime, formatPrice, formatUnit } from "@/lib/format";
 import {
   cancelPurchaseOrderAction,
   deletePurchaseOrderAction,
@@ -81,8 +81,8 @@ export default async function CompraDetallePage({ params, searchParams }: { para
                 <tr key={l.id} className="border-b last:border-b-0">
                   <td className="px-4 py-3">{l.product_name}</td>
                   <td className="px-4 py-3 text-right font-mono">{l.quantity}</td>
-                  <td className="px-4 py-3 text-right font-mono">{l.unit_cost_usd != null ? `${l.unit_cost_usd.toFixed(2)} USD` : "—"}</td>
-                  <td className="px-4 py-3 text-right font-mono">{formatPrice(l.unit_cost)}</td>
+                  <td className="px-4 py-3 text-right font-mono">{l.unit_cost_usd != null ? `${formatUnit(l.unit_cost_usd)} USD` : "—"}</td>
+                  <td className="px-4 py-3 text-right font-mono">{formatUnit(l.unit_cost)}</td>
                   <td className="px-4 py-3 text-right font-mono">{formatPrice(l.line_total)}</td>
                 </tr>
               ))}
