@@ -81,14 +81,27 @@ function stageOf(type: WarehouseType): "centro" | "almacen" | "puntos" {
 }
 
 export async function capitalSnapshot(business: string): Promise<CapitalSnapshot> {
-  const [balance, valuation, warehouses, infrastructure, usdRate, contributions] = await Promise.all([
+  const [balance, valuation, warehouses, assets, usdRate, contributions] = await Promise.all([
     trialBalance({ business }),
     stockValuation(),
     listWarehouses([business]),
-    sumFixedAssets(business),
+    listFixedAssets(business),
     getRate("USD"),
     listContributions(business),
   ]);
+
+  // Infraestructura desde la tabla fixed_assets (no del asiento): CUP guardado +
+  // USD congelado por activo. Así la tarjeta coincide con la lista de activos sin
+  // depender de que el asiento exista/esté fresco. Activos antiguos sin USD
+  // congelado se aproximan con la última tasa.
+  const infrastructure = Math.round(assets.reduce((s, a) => s + Number(a.amount), 0) * 100) / 100;
+  const infrastructureUsd =
+    Math.round(
+      assets.reduce(
+        (s, a) => s + (a.amount_usd != null ? Number(a.amount_usd) : usdRate && usdRate > 0 ? Number(a.amount) / usdRate : 0),
+        0,
+      ) * 100,
+    ) / 100;
 
   const byCode = new Map(balance.map((r) => [r.account_code, r.balance]));
   const byCodeUsd = new Map(balance.map((r) => [r.account_code, r.balance_usd]));
@@ -102,7 +115,6 @@ export async function capitalSnapshot(business: string): Promise<CapitalSnapshot
   const receivablesUsd = byCodeUsd.get(ACC_CXC) ?? 0;
   const payables = byCode.get(ACC_CXP) ?? 0;
   const payablesUsd = byCodeUsd.get(ACC_CXP) ?? 0;
-  const infrastructureUsd = byCodeUsd.get(ACC_INFRA) ?? 0;
 
   // Capital aportado por socios, por moneda de aporte (fuente: capital_contributions).
   const contributed = { cup: 0, usd: 0, total: 0 };
@@ -179,11 +191,6 @@ export const listFixedAssets = unstable_cache(
   ["fixed_assets"],
   { revalidate: 60, tags: [TAG] },
 );
-
-async function sumFixedAssets(business: string): Promise<number> {
-  const assets = await listFixedAssets(business);
-  return assets.reduce((s, a) => s + a.amount, 0);
-}
 
 /**
  * Registra una inversión en infraestructura, congelando su equivalente USD a la
