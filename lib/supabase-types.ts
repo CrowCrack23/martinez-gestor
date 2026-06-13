@@ -645,6 +645,8 @@ export type Database = {
           business_slug: string;
           name: string;
           amount: number;
+          currency: "CUP" | "USD";
+          amount_usd: number | null;
           acquired_at: string;
           notes: string;
           journal_entry_id: string | null;
@@ -656,12 +658,14 @@ export type Database = {
           business_slug: string;
           name: string;
           amount: number;
+          currency?: "CUP" | "USD";
+          amount_usd?: number | null;
           acquired_at?: string;
           notes?: string;
           journal_entry_id?: string | null;
           created_by?: string | null;
         };
-        Update: Partial<{ name: string; amount: number; acquired_at: string; notes: string; journal_entry_id: string | null }>;
+        Update: Partial<{ name: string; amount: number; currency: "CUP" | "USD"; amount_usd: number | null; acquired_at: string; notes: string; journal_entry_id: string | null }>;
         Relationships: [];
       };
       // ── Tenedores de dinero / deudores (remesas) ──

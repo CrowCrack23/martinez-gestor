@@ -265,8 +265,15 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
                 <Input id="name" name="name" placeholder="Ej: nevera, local, mobiliario" required />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="amount" className="text-xs">Monto (CUP)</Label>
+                <Label htmlFor="amount" className="text-xs">Monto</Label>
                 <Input id="amount" name="amount" type="number" step="0.01" min="0.01" className="w-36" required />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="asset_currency" className="text-xs">Moneda</Label>
+                <Select id="asset_currency" name="currency" defaultValue="CUP" className="w-24">
+                  <option value="CUP">CUP</option>
+                  <option value="USD">USD</option>
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label htmlFor="acquired_at" className="text-xs">Fecha</Label>
@@ -279,13 +286,19 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
               <Button type="submit" size="sm">Registrar inversión</Button>
             </form>
           )}
+          {isAdmin && (
+            <p className="text-xs text-muted-foreground">
+              El equivalente en USD se congela a la tasa del día (moneda rectora). Requiere una tasa vigente registrada en /remesas/tasas.
+            </p>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[480px]">
               <thead className="text-left text-muted-foreground border-b">
                 <tr>
                   <th className="px-4 py-3 font-medium">Fecha</th>
                   <th className="px-4 py-3 font-medium">Descripción</th>
-                  <th className="px-4 py-3 font-medium text-right">Monto</th>
+                  <th className="px-4 py-3 font-medium text-right">USD</th>
+                  <th className="px-4 py-3 font-medium text-right">CUP</th>
                   <th className="px-4 py-3 font-medium">Notas</th>
                   {isAdmin && <th className="px-4 py-3 font-medium text-right">Acciones</th>}
                 </tr>
@@ -293,7 +306,7 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
               <tbody>
                 {assets.length === 0 && (
                   <tr>
-                    <td colSpan={isAdmin ? 5 : 4} className="px-4 py-6 text-center text-muted-foreground text-xs">
+                    <td colSpan={isAdmin ? 6 : 5} className="px-4 py-6 text-center text-muted-foreground text-xs">
                       Sin inversiones en infraestructura registradas.
                     </td>
                   </tr>
@@ -302,7 +315,8 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
                   <tr key={a.id} className="border-b last:border-b-0">
                     <td className="px-4 py-3">{a.acquired_at}</td>
                     <td className="px-4 py-3">{a.name}</td>
-                    <td className="px-4 py-3 text-right font-mono">{fmt(a.amount)}</td>
+                    <td className="px-4 py-3 text-right font-mono">{formatUsd(a.amount_usd)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-muted-foreground">{fmt(a.amount)}</td>
                     <td className="px-4 py-3 text-muted-foreground">{a.notes || "—"}</td>
                     {isAdmin && (
                       <td className="px-4 py-3 text-right">

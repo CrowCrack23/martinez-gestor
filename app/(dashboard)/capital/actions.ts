@@ -10,10 +10,13 @@ export async function addFixedAssetAction(formData: FormData) {
   try {
     const amount = Number(formData.get("amount") ?? 0);
     if (!Number.isFinite(amount) || amount <= 0) throw new ValidationError("Monto inválido.");
+    const currency = String(formData.get("currency") ?? "CUP");
+    if (currency !== "CUP" && currency !== "USD") throw new ValidationError("Moneda inválida.");
     await addFixedAsset({
       business_slug: requireString(formData, "business_slug", "Negocio"),
       name: requireString(formData, "name", "Descripción"),
       amount,
+      currency,
       acquired_at: requireString(formData, "acquired_at", "Fecha"),
       notes: optionalString(formData, "notes"),
       created_by: user.id,

@@ -170,7 +170,11 @@ export const listFixedAssets = unstable_cache(
     if (business) q = q.eq("business_slug", business);
     const { data, error } = await q;
     if (error) throw error;
-    return ((data ?? []) as FixedAsset[]).map((a) => ({ ...a, amount: Number(a.amount) }));
+    return ((data ?? []) as FixedAsset[]).map((a) => ({
+      ...a,
+      amount: Number(a.amount),
+      amount_usd: a.amount_usd != null ? Number(a.amount_usd) : null,
+    }));
   },
   ["fixed_assets"],
   { revalidate: 60, tags: [TAG] },
@@ -182,25 +186,37 @@ async function sumFixedAssets(business: string): Promise<number> {
 }
 
 /**
- * Registra una inversión en infraestructura y genera (best-effort) el asiento
- * Infraestructura (1500) DEBE / Caja CUP (1110) HABER.
+ * Registra una inversión en infraestructura, congelando su equivalente USD a la
+ * tasa del día (moneda funcional). El monto se captura en CUP o USD; `amount` se
+ * guarda siempre en CUP y `amount_usd` es el USD real congelado. Genera el asiento
+ * Infraestructura (1500) DEBE / Caja (1110 CUP | 1120 USD) HABER, dual CUP/USD.
  */
 export async function addFixedAsset(input: {
   business_slug: string;
   name: string;
   amount: number;
+  currency: "CUP" | "USD";
   acquired_at: string;
   notes?: string;
   created_by: string | null;
 }): Promise<void> {
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Monto inválido.");
   const sb = getSupabase();
+
+  // Montos duales congelados a la tasa del día (bloquea si está vieja).
+  const rate = await assertFreshRate();
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const amountCup = input.currency === "USD" ? round2(input.amount * rate) : input.amount;
+  const amountUsd = input.currency === "USD" ? input.amount : round2(input.amount / rate);
+
   const { data, error } = await sb
     .from("fixed_assets")
     .insert({
       business_slug: input.business_slug,
       name: input.name,
-      amount: input.amount,
+      amount: amountCup,
+      amount_usd: amountUsd,
+      currency: input.currency,
       acquired_at: input.acquired_at,
       notes: input.notes ?? "",
       created_by: input.created_by,
@@ -210,16 +226,16 @@ export async function addFixedAsset(input: {
   if (error) throw error;
 
   try {
+    const cajaCode = input.currency === "USD" ? ACC_CAJA_USD : ACC_CAJA_CUP;
     const { data: accounts, error: aErr } = await sb
       .from("accounts")
       .select("id, code")
-      .in("code", [ACC_INFRA, ACC_CAJA_CUP]);
+      .in("code", [ACC_INFRA, cajaCode]);
     if (aErr) throw aErr;
     const byCode = new Map((accounts ?? []).map((a) => [a.code, a.id]));
     const infra = byCode.get(ACC_INFRA);
-    const caja = byCode.get(ACC_CAJA_CUP);
-    if (!infra || !caja) throw new Error("Faltan cuentas 1500/1110 en el plan de cuentas (aplicar migración 0031).");
-    const rate = await assertFreshRate();
+    const caja = byCode.get(cajaCode);
+    if (!infra || !caja) throw new Error(`Faltan cuentas ${ACC_INFRA}/${cajaCode} en el plan de cuentas.`);
     const entryId = await createJournalEntry({
       entry_date: input.acquired_at,
       description: `Infraestructura — ${input.name}`,
@@ -229,8 +245,8 @@ export async function addFixedAsset(input: {
       exchange_rate: rate,
       created_by: input.created_by,
       lines: [
-        { account_id: infra, debit: input.amount, credit: 0, description: input.name },
-        { account_id: caja, debit: 0, credit: input.amount, description: "Pago de infraestructura" },
+        { account_id: infra, debit: amountCup, credit: 0, debit_usd: amountUsd, credit_usd: 0, description: input.name },
+        { account_id: caja, debit: 0, credit: amountCup, debit_usd: 0, credit_usd: amountUsd, description: `Pago de infraestructura (${input.currency})` },
       ],
     });
     await sb.from("fixed_assets").update({ journal_entry_id: entryId }).eq("id", data.id);
