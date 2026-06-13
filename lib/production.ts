@@ -239,10 +239,107 @@ export async function deleteProductionOrder(id: string): Promise<void> {
   const sb = getSupabase();
   const po = await getProductionOrder(id);
   if (!po) return;
-  if (po.status === "producida") throw new Error("No se puede eliminar una orden producida (afecta inventario).");
+  if (po.status === "producida") {
+    throw new Error("La orden está producida. Anula primero la producción (vuelve a borrador) y luego elimínala.");
+  }
   const { error } = await sb.from("production_orders").delete().eq("id", id);
   if (error) throw error;
   bust();
+}
+
+/**
+ * Anula una producción hecha por error: quita del stock el producto terminado y
+ * borra su lote, devuelve a su lote cada insumo consumido y repone su stock,
+ * borra los dos movimientos y deja la orden en borrador. Producción no genera
+ * asiento contable, así que no hay nada que descontabilizar. Solo es seguro si el
+ * producto terminado NO se ha vendido ni movido (lote intacto); si no, hay que
+ * corregir con un ajuste de inventario.
+ */
+export async function undoProduceOrder(id: string): Promise<void> {
+  const sb = getSupabase();
+  const po = await getProductionOrder(id);
+  if (!po) throw new Error("Orden no encontrada.");
+  if (po.status !== "producida") throw new Error("Solo se puede anular una orden producida.");
+  if (!po.movement_in_id || !po.movement_out_id) {
+    throw new Error("La orden no tiene movimientos de inventario asociados.");
+  }
+
+  // 1. El producto terminado no se puede haber consumido (lote intacto).
+  const { data: finLots, error: fErr } = await sb
+    .from("inventory_lots")
+    .select("id, product_id, warehouse_id, qty_received, qty_remaining")
+    .eq("movement_id", po.movement_in_id);
+  if (fErr) throw fErr;
+  for (const lot of finLots ?? []) {
+    if (Number(lot.qty_remaining) !== Number(lot.qty_received)) {
+      throw new Error("No se puede anular: el producto terminado ya se vendió o se movió. Corrige con un ajuste de inventario.");
+    }
+  }
+
+  // 2. Revierte el stock del producto terminado (la entrada no se revierte sola).
+  for (const lot of finLots ?? []) {
+    await adjustStock(lot.product_id, lot.warehouse_id, -Number(lot.qty_received));
+  }
+  // Borra los lotes del terminado (movement_id es on delete set null, no cascade).
+  const { error: dflErr } = await sb.from("inventory_lots").delete().eq("movement_id", po.movement_in_id);
+  if (dflErr) throw dflErr;
+  // Borra el movimiento de entrada (cascade borra sus líneas).
+  const { error: dmiErr } = await sb.from("inventory_movements").delete().eq("id", po.movement_in_id);
+  if (dmiErr) throw dmiErr;
+
+  // 3. Devuelve a cada lote los insumos que la salida consumió por FIFO.
+  const { data: consumptions, error: cErr } = await sb
+    .from("inventory_lot_consumptions")
+    .select("id, lot_id, product_id, warehouse_id, quantity")
+    .eq("movement_id", po.movement_out_id);
+  if (cErr) throw cErr;
+  for (const c of consumptions ?? []) {
+    const { data: lot, error: gErr } = await sb
+      .from("inventory_lots")
+      .select("qty_remaining")
+      .eq("id", c.lot_id)
+      .single();
+    if (gErr) throw gErr;
+    const { error: uErr } = await sb
+      .from("inventory_lots")
+      .update({ qty_remaining: Number(lot.qty_remaining) + Number(c.quantity) })
+      .eq("id", c.lot_id);
+    if (uErr) throw uErr;
+    await adjustStock(c.product_id, c.warehouse_id, Number(c.quantity));
+  }
+  const { error: dcErr } = await sb.from("inventory_lot_consumptions").delete().eq("movement_id", po.movement_out_id);
+  if (dcErr) throw dcErr;
+  const { error: dmoErr } = await sb.from("inventory_movements").delete().eq("id", po.movement_out_id);
+  if (dmoErr) throw dmoErr;
+
+  // 4. Devuelve la orden a borrador.
+  const { error: poErr } = await sb
+    .from("production_orders")
+    .update({ status: "borrador", produced_by: null, produced_at: null, movement_in_id: null, movement_out_id: null })
+    .eq("id", id);
+  if (poErr) throw poErr;
+
+  bust();
+  revalidateTag("costing", "max");
+}
+
+/** Suma `delta` (con signo) a stock_locations de (producto, almacén). */
+async function adjustStock(productId: string, warehouseId: string, delta: number): Promise<void> {
+  const sb = getSupabase();
+  const { data: stock, error } = await sb
+    .from("stock_locations")
+    .select("quantity")
+    .eq("product_id", productId)
+    .eq("warehouse_id", warehouseId)
+    .maybeSingle();
+  if (error) throw error;
+  const current = Number(stock?.quantity ?? 0);
+  const { error: uErr } = await sb
+    .from("stock_locations")
+    .update({ quantity: current + delta })
+    .eq("product_id", productId)
+    .eq("warehouse_id", warehouseId);
+  if (uErr) throw uErr;
 }
 
 export const PRODUCTION_STATUS_LABEL: Record<ProductionStatus, string> = {

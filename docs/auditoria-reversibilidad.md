@@ -106,5 +106,11 @@ El **borrado manual** de un asiento suelto en `/contabilidad` (`deleteJournalEnt
 - #10 Ventas: ✅ `undoConfirmOrder` (`/ventas/[id]`). Solo admin. Devuelve los
   lotes consumidos (`inventory_lot_consumptions`), repone stock, borra asiento de
   venta y movimiento (descontabiliza si hace falta), y vuelve a borrador.
+- #11 Producción: ✅ `undoProduceOrder` (`/produccion/[id]`). Solo admin. Mismo
+  caso espejo (una orden "producida" no se podía borrar): quita del stock el
+  producto terminado y borra su lote, devuelve los insumos consumidos y repone su
+  stock, borra los dos movimientos y vuelve a borrador. Producción NO genera
+  asiento, así que no hay nada que descontabilizar. Bloquea si el terminado ya se
+  vendió/movió.
 
 **Mejora aparte:** botón de "ajuste inverso" guiado en movimientos de inventario.

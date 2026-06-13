@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
 import { formatDateTime } from "@/lib/format";
-import { cancelProductionOrderAction, deleteProductionOrderAction, produceOrderAction } from "../actions";
+import { cancelProductionOrderAction, deleteProductionOrderAction, produceOrderAction, undoProduceOrderAction } from "../actions";
 
 type Params = Promise<{ id: string }>;
 type SP = Promise<{ success?: string; error?: string }>;
@@ -102,6 +102,24 @@ export default async function ProduccionDetallePage({ params, searchParams }: { 
           </Card>
         </>
       )}
+
+      {po.status === "producida" && canDelete && (
+        <Card className="border-destructive/30">
+          <CardContent className="pt-6 flex flex-wrap gap-3 items-center justify-between">
+            <div>
+              <div className="font-medium">Anular producción</div>
+              <div className="text-sm text-muted-foreground">
+                Repone los insumos consumidos, quita del stock el producto terminado y devuelve la orden a borrador
+                (para corregirla o eliminarla). Solo si el producto terminado no se ha vendido ni movido.
+              </div>
+            </div>
+            <form action={undoProduceOrderAction.bind(null, po.id)}>
+              <Button type="submit" variant="destructive">Anular producción</Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
       <div><Button asChild variant="ghost"><Link href="/produccion">← Volver</Link></Button></div>
     </div>
   );

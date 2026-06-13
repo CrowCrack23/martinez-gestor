@@ -2,7 +2,7 @@
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import {
-  cancelProductionOrder, createProductionOrder, deleteProductionOrder, produceOrder,
+  cancelProductionOrder, createProductionOrder, deleteProductionOrder, produceOrder, undoProduceOrder,
 } from "@/lib/production";
 import { optionalString, requireString, ValidationError } from "@/lib/validation";
 
@@ -37,6 +37,17 @@ export async function cancelProductionOrderAction(id: string) {
   try { await cancelProductionOrder(id); }
   catch (e) { redirect(`/produccion/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`); }
   redirect(`/produccion/${id}?success=Orden+cancelada`);
+}
+
+export async function undoProduceOrderAction(id: string) {
+  // Anular producción es exclusivo del dueño (revierte inventario).
+  await requireRole(["admin"]);
+  try { await undoProduceOrder(id); }
+  catch (e) {
+    if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
+    redirect(`/produccion/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
+  }
+  redirect(`/produccion/${id}?success=Producci%C3%B3n+anulada+(vuelta+a+borrador)`);
 }
 
 export async function deleteProductionOrderAction(id: string) {
