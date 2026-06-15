@@ -91,7 +91,7 @@ export function OrderLineEditor({
                 ))}
               </Select>
               <Input
-                type="number" step="1" min={1} name="quantity" required
+                type="number" step="any" min={0} name="quantity" required
                 value={r.quantity}
                 onChange={(e) => setRows((cur) => cur.map((x) => (x.uid === r.uid ? { ...x, quantity: e.target.value } : x)))}
                 placeholder="Cant."

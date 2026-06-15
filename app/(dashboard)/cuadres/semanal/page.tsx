@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { formatPrice } from "@/lib/format";
+import { formatPrice, formatQty } from "@/lib/format";
 
 type SP = Promise<{ warehouse?: string; week?: string }>;
 
@@ -72,13 +72,14 @@ export default async function CuadreSemanalPage({ searchParams }: { searchParams
             <span className="font-mono">{report.week_end}</span> — {report.warehouse_name}
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
             <Kpi label="Ventas (CUP)" value={formatPrice(report.totals.revenue_cup)}
                  delta={pctDelta(report.totals.revenue_cup, report.prev_totals.revenue_cup)} />
             <Kpi label="Costo (CUP)" value={formatPrice(report.totals.cogs_cup)} />
             <Kpi label="Ganancia (CUP)" value={formatPrice(report.totals.profit_cup)}
                  delta={pctDelta(report.totals.profit_cup, report.prev_totals.profit_cup)} accent />
             <Kpi label="Pago trabajador" value={formatPrice(report.totals.commission_cup)} />
+            <Kpi label="Merma (CUP)" value={formatPrice(report.totals.merma_cup)} />
             <Kpi label="Ganancia neta" value={formatPrice(report.totals.net_cup)}
                  delta={pctDelta(report.totals.net_cup, report.prev_totals.net_cup)} accent />
           </div>
@@ -179,7 +180,7 @@ export default async function CuadreSemanalPage({ searchParams }: { searchParams
                   {report.products.map((p) => (
                     <tr key={p.product_id} className="border-b last:border-b-0">
                       <td className="px-4 py-2">{p.product_name}</td>
-                      <td className="px-4 py-2 text-right font-mono">{p.qty}</td>
+                      <td className="px-4 py-2 text-right font-mono">{formatQty(p.qty)}</td>
                       <td className="px-4 py-2 text-right font-mono">{formatPrice(p.revenue_cup)}</td>
                       <td className="px-4 py-2 text-right font-mono">{formatPrice(p.profit_cup)}</td>
                     </tr>

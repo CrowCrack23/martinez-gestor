@@ -7,7 +7,7 @@ import { listStoresLite } from "@/lib/stores-lite";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, ArrowLeftRight, Layers, Plus } from "lucide-react";
-import { formatNumber, formatPrice } from "@/lib/format";
+import { formatNumber, formatPrice, formatQty } from "@/lib/format";
 import { Flash } from "@/components/flash";
 
 type SP = Promise<{ warehouse?: string; store?: string; low?: string; success?: string; error?: string }>;
@@ -118,7 +118,7 @@ export default async function InventarioPage({ searchParams }: { searchParams: S
                   <td className="px-4 py-3 text-muted-foreground">{r.product_store}</td>
                   <td className="px-4 py-3 text-muted-foreground">{r.warehouse_name}</td>
                   <td className={`px-4 py-3 text-right font-mono ${low ? "text-destructive font-semibold" : ""}`}>
-                    {formatNumber(r.quantity)}
+                    {formatQty(r.quantity)}
                   </td>
                   <td className="px-4 py-3 text-right text-muted-foreground font-mono">{formatNumber(r.min_stock)}</td>
                   <td className="px-4 py-3 text-right text-muted-foreground font-mono">{val ? formatPrice(val.avg_cost) : "—"}</td>

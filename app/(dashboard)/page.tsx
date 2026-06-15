@@ -7,7 +7,7 @@ import { listWarehouses } from "@/lib/warehouses";
 import { listStock, listMovements, MOVEMENT_TYPE_LABEL } from "@/lib/inventory";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatDateTime, formatNumber } from "@/lib/format";
+import { formatDateTime, formatNumber, formatQty } from "@/lib/format";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -41,7 +41,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Unidades en stock" value={formatNumber(totalUnits)} icon={<Boxes className="size-4" />} />
+        <KpiCard label="Unidades en stock" value={formatQty(totalUnits)} icon={<Boxes className="size-4" />} />
         <KpiCard label="Almacenes activos" value={String(activeWarehouses)} icon={<Warehouse className="size-4" />} />
         <KpiCard
           label="Bajo stock"
@@ -69,7 +69,7 @@ export default async function DashboardPage() {
                 {topWarehouses.map((w) => (
                   <li key={w.name} className="flex items-center justify-between">
                     <span>{w.name}</span>
-                    <span className="font-mono text-muted-foreground">{formatNumber(w.qty)}</span>
+                    <span className="font-mono text-muted-foreground">{formatQty(w.qty)}</span>
                   </li>
                 ))}
               </ul>
@@ -100,7 +100,7 @@ export default async function DashboardPage() {
                   <li key={`${r.product_id}-${r.warehouse_id}`} className="flex items-center justify-between gap-3">
                     <span className="truncate">{r.product_name} <span className="text-muted-foreground">— {r.warehouse_name}</span></span>
                     <span className="font-mono text-destructive whitespace-nowrap">
-                      {formatNumber(r.quantity)} / {formatNumber(r.min_stock)}
+                      {formatQty(r.quantity)} / {formatNumber(r.min_stock)}
                     </span>
                   </li>
                 ))}
@@ -133,7 +133,7 @@ export default async function DashboardPage() {
               {movements.map((m) => (
                 <li key={m.id} className="py-2 flex items-center justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="font-medium">{MOVEMENT_TYPE_LABEL[m.type]} <span className="text-muted-foreground font-normal">· {m.line_count} líneas · {formatNumber(m.total_quantity)} u.</span></div>
+                    <div className="font-medium">{MOVEMENT_TYPE_LABEL[m.type]} <span className="text-muted-foreground font-normal">· {m.line_count} líneas · {formatQty(m.total_quantity)} u.</span></div>
                     <div className="text-xs text-muted-foreground truncate">
                       {m.warehouse_from_name ?? "—"} → {m.warehouse_to_name ?? "—"} {m.notes && `· ${m.notes}`}
                     </div>

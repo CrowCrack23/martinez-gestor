@@ -5,7 +5,7 @@ import { listWarehouses } from "@/lib/warehouses";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import { formatNumber, formatPrice, formatDateTime } from "@/lib/format";
+import { formatPrice, formatDateTime, formatQty } from "@/lib/format";
 import { Flash } from "@/components/flash";
 import { setOpeningLotCostAction } from "./actions";
 
@@ -92,8 +92,8 @@ export default async function LotesPage({ searchParams }: { searchParams: SP }) 
                   <td className="px-4 py-3 font-medium">{l.product_name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{l.warehouse_name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{SOURCE_LABEL[l.source_type] ?? l.source_type}</td>
-                  <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatNumber(l.qty_received)}</td>
-                  <td className="px-4 py-3 text-right font-mono">{formatNumber(l.qty_remaining)}</td>
+                  <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatQty(l.qty_received)}</td>
+                  <td className="px-4 py-3 text-right font-mono">{formatQty(l.qty_remaining)}</td>
                   <td className="px-4 py-3 text-right">
                     {editable ? (
                       <form action={setOpeningLotCostAction} className="flex items-center justify-end gap-1">

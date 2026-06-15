@@ -362,6 +362,7 @@ export async function confirmOrder(id: string, userId: string): Promise<void> {
     customerName: o.customer_name,
     total,
     paymentMethod: o.payment_method,
+    currency: o.currency,
     origin: o.origin,
     movementId,
     business: o.warehouse_store,

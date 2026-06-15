@@ -2,6 +2,7 @@ import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { createLot, consumeFIFO, averageCostDual, bustCosting } from "./costing";
+import { generateMermaEntry } from "./auto-accounting";
 import type { InventoryMovementType } from "./supabase-types";
 
 const TAG = "inventory";
@@ -152,6 +153,9 @@ export async function createMovement(input: {
   // aquí mantenemos el ledger de lotes en sincronía y registramos el costo real
   // de las salidas (FIFO). source_type del lote = reference_type del movimiento.
   const source = input.reference_type ?? "manual";
+  // Costo real de una merma (suma del consumo FIFO) para reconocerla como gasto.
+  let mermaCost = 0;
+  let mermaCostUsd = 0;
   for (const l of input.lines) {
     if (input.type === "entrada") {
       await createLot({
@@ -166,12 +170,16 @@ export async function createMovement(input: {
         movement_id: mov.id,
       });
     } else if (input.type === "salida" || input.type === "merma") {
-      await consumeFIFO({
+      const consumed = await consumeFIFO({
         product_id: l.product_id,
         warehouse_id: input.warehouse_from!,
         quantity: l.quantity,
         movement_id: mov.id,
       });
+      if (input.type === "merma") {
+        mermaCost += consumed.cost;
+        mermaCostUsd += consumed.cost_usd;
+      }
     } else if (input.type === "transferencia") {
       // Consumir del origen al costo FIFO y recrear el lote en destino al mismo
       // costo promedio (dual), para no perder la valuación al mover stock.
@@ -222,6 +230,26 @@ export async function createMovement(input: {
         });
       }
     }
+  }
+
+  // Merma → asiento de pérdida (gasto) con el costo real consumido. Best-effort:
+  // un fallo contable no revierte el movimiento de inventario (igual que ventas).
+  if (input.type === "merma" && (mermaCost > 0 || mermaCostUsd > 0)) {
+    const { data: wh } = await sb
+      .from("warehouses")
+      .select("store_slug")
+      .eq("id", input.warehouse_from!)
+      .maybeSingle();
+    await generateMermaEntry({
+      movementId: mov.id,
+      costCup: mermaCost,
+      costUsd: mermaCostUsd,
+      business: wh?.store_slug ?? null,
+      date: new Date().toISOString().slice(0, 10),
+      userId: input.user_id ?? null,
+      rate: input.rate ?? null,
+      notes: input.notes?.trim() || undefined,
+    });
   }
 
   bust();

@@ -5,7 +5,7 @@ import { listMovements, MOVEMENT_TYPE_LABEL } from "@/lib/inventory";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
-import { formatDateTime, formatNumber } from "@/lib/format";
+import { formatDateTime, formatQty } from "@/lib/format";
 
 type SP = Promise<{ success?: string; error?: string }>;
 
@@ -62,7 +62,7 @@ export default async function MovimientosPage({ searchParams }: { searchParams: 
                   {m.warehouse_from_name ?? "—"} → {m.warehouse_to_name ?? "—"}
                 </td>
                 <td className="px-4 py-3 text-right font-mono">{m.line_count}</td>
-                <td className="px-4 py-3 text-right font-mono">{formatNumber(m.total_quantity)}</td>
+                <td className="px-4 py-3 text-right font-mono">{formatQty(m.total_quantity)}</td>
                 <td className="px-4 py-3 text-muted-foreground text-xs">{m.user_name ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground text-xs max-w-xs truncate">{m.notes}</td>
               </tr>

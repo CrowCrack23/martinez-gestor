@@ -75,6 +75,13 @@ export default async function NuevaCompraPage({ searchParams }: { searchParams: 
                   <option value="contado">De contado (sale de la caja del negocio)</option>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="payment_currency">Moneda del pago de contado</Label>
+                <Select id="payment_currency" name="payment_currency" defaultValue="USD">
+                  <option value="USD">USD (sale de la Caja USD)</option>
+                  <option value="CUP">CUP (sale de la Caja CUP)</option>
+                </Select>
+              </div>
             </div>
             <PurchaseLineEditor products={products} rate={rate && !rate.stale ? rate.rate : null} />
             <div className="space-y-2">

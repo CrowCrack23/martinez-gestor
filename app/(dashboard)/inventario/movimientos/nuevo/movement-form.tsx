@@ -98,8 +98,8 @@ export function MovementForm({
               <div className="w-32">
                 <Input
                   type="number"
-                  step="1"
-                  min={allowNegative ? undefined : 1}
+                  step="any"
+                  min={allowNegative ? undefined : 0}
                   name="quantity"
                   required
                   value={line.quantity}

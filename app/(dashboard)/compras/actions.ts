@@ -42,8 +42,8 @@ function parseLines(form: FormData): PurchaseLineInput[] {
     const cost = costs[i];
     if (!isNew && !pid) continue;
     if (isNew && !name) throw new ValidationError(`Escribe el nombre del producto nuevo en línea ${i + 1}.`);
-    if (!Number.isInteger(qty) || qty <= 0) {
-      throw new ValidationError(`Cantidad inválida en línea ${i + 1} (debe ser un entero > 0).`);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw new ValidationError(`Cantidad inválida en línea ${i + 1} (debe ser mayor a 0).`);
     }
     if (!Number.isFinite(cost) || cost < 0) {
       throw new ValidationError(`Costo USD inválido en línea ${i + 1}.`);
@@ -75,6 +75,7 @@ export async function createPurchaseOrderAction(formData: FormData) {
       reference: optionalString(formData, "reference"),
       notes: optionalString(formData, "notes"),
       paid_cash: formData.get("payment") === "contado",
+      payment_currency: formData.get("payment_currency") === "CUP" ? "CUP" : "USD",
       created_by: user.id,
       lines: parseLines(formData),
     });
@@ -95,6 +96,7 @@ export async function updatePurchaseOrderAction(id: string, formData: FormData) 
       reference: optionalString(formData, "reference"),
       notes: optionalString(formData, "notes"),
       paid_cash: formData.get("payment") === "contado",
+      payment_currency: formData.get("payment_currency") === "CUP" ? "CUP" : "USD",
     });
     await replacePurchaseOrderLines(id, parseLines(formData));
   } catch (e) {

@@ -17,6 +17,15 @@ export function formatNumber(n: number): string {
   return NUMBER_FMT.format(n);
 }
 
+const QTY_FMT = new Intl.NumberFormat("es-CU", {
+  maximumFractionDigits: 3, // cantidades de inventario: enteras o con coma (insumos)
+});
+
+/** Formatea una CANTIDAD de inventario (entera o hasta 3 decimales, sin ceros sobrantes). */
+export function formatQty(n: number): string {
+  return QTY_FMT.format(n);
+}
+
 export function formatPrice(n: number): string {
   return PRICE_FMT.format(n);
 }

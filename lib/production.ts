@@ -11,6 +11,9 @@ function bust() {
   revalidateTag("inventory", "max");
 }
 
+/** Redondeo de cantidades a 3 decimales (insumos/producción admiten coma). */
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
 // ── BOMs ──────────────────────────────────────────────────────────────────
 
 export type Bom = Database["public"]["Tables"]["bills_of_materials"]["Row"];
@@ -171,16 +174,18 @@ export async function produceOrder(id: string, userId: string): Promise<void> {
   const builds = Number(po.quantity);
 
   // Validar la cantidad producida antes de tocar inventario, para no dejar
-  // movimientos/lotes a medio aplicar.
-  const producedQty = Math.floor(Number(bom.yield) * builds);
+  // movimientos/lotes a medio aplicar. Las cantidades admiten decimales
+  // (insumos por coma), así que se redondea a 3 decimales en vez de truncar.
+  const producedQty = round3(Number(bom.yield) * builds);
   if (producedQty <= 0) {
     throw new Error("La cantidad producida resulta en 0 unidades.");
   }
 
-  // Salida de insumos (consume lotes FIFO y registra su costo real)
+  // Salida de insumos (consume lotes FIFO y registra su costo real). La cantidad
+  // de cada insumo = cantidad_por_unidad × vueltas, exacta a 3 decimales.
   const outLines = bom.components.map((c) => ({
     product_id: c.component_product_id,
-    quantity: Math.ceil(Number(c.quantity_per_unit) * builds),
+    quantity: round3(Number(c.quantity_per_unit) * builds),
   }));
   const movOut = await createMovement({
     type: "salida",

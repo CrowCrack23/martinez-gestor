@@ -43,7 +43,7 @@ export async function createMovementAction(formData: FormData) {
       const pid = productIds[i];
       const qty = quantities[i];
       if (!pid) continue;
-      if (!Number.isInteger(qty) || qty === 0) {
+      if (!Number.isFinite(qty) || qty === 0) {
         throw new ValidationError(`Cantidad inválida en línea ${i + 1}.`);
       }
       if (type !== "ajuste" && qty < 0) {

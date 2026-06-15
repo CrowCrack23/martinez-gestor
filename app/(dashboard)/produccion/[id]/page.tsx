@@ -65,13 +65,13 @@ export default async function ProduccionDetallePage({ params, searchParams }: { 
                   <tr key={c.id}>
                     <td className="py-1">{c.component_name}</td>
                     <td className="py-1 text-right font-mono">{c.quantity_per_unit}</td>
-                    <td className="py-1 text-right font-mono">{(Number(c.quantity_per_unit) * Number(po.quantity)).toFixed(2)}</td>
+                    <td className="py-1 text-right font-mono">{Math.round(Number(c.quantity_per_unit) * Number(po.quantity) * 1000) / 1000}</td>
                   </tr>
                 ))}
                 <tr className="border-t font-medium">
                   <td className="py-2">{po.finished_product_name} (a producir)</td>
                   <td></td>
-                  <td className="py-2 text-right font-mono">{Math.floor(Number(bom.yield) * Number(po.quantity))}</td>
+                  <td className="py-2 text-right font-mono">{Math.round(Number(bom.yield) * Number(po.quantity) * 1000) / 1000}</td>
                 </tr>
               </tbody>
             </table>

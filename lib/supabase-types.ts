@@ -312,6 +312,7 @@ export type Database = {
           reference: string;
           notes: string;
           paid_cash: boolean;
+          payment_currency: "CUP" | "USD";
           total_amount: number;
           rate: number | null;
           total_usd: number | null;
@@ -331,6 +332,7 @@ export type Database = {
           reference?: string;
           notes?: string;
           paid_cash?: boolean;
+          payment_currency?: "CUP" | "USD";
           rate?: number | null;
           total_usd?: number | null;
           created_by?: string | null;
@@ -342,6 +344,7 @@ export type Database = {
           reference?: string;
           notes?: string;
           paid_cash?: boolean;
+          payment_currency?: "CUP" | "USD";
           rate?: number | null;
           total_usd?: number | null;
           received_by?: string | null;

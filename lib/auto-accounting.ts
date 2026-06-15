@@ -3,7 +3,7 @@ import { getSupabase } from "./supabase";
 import { createJournalEntry, type JournalLineInput } from "./accounting";
 import { movementCostDual } from "./costing";
 import { getCurrentRate } from "./currency";
-import type { PaymentMethod, OrderOrigin } from "./supabase-types";
+import type { PaymentMethod, OrderOrigin, OrderCurrency } from "./supabase-types";
 
 // Generación automática de asientos contables (en borrador) a partir de los
 // eventos de negocio: recepción de compra, confirmación de venta, cierre de
@@ -33,6 +33,7 @@ const ACC = {
   comisionesRemesas: "4300",
   diferenciaTasas: "4310",
   costoVentas: "5100",
+  perdidaMerma: "5320",
   salarios: "5200",
   comisionesVenta: "5250",
   pagoMensajeros: "5260",
@@ -80,8 +81,13 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** Cuenta de cobro según método de pago. */
-function debitAccountForPayment(method: PaymentMethod): keyof typeof ACC {
+/**
+ * Cuenta de cobro según método de pago y moneda. El efectivo en USD entra a la
+ * Caja USD (1120); en CUP a la Caja CUP (1110). Transferencia/tarjeta van al
+ * banco (CUP). Otros métodos quedan a cuentas por cobrar.
+ */
+function debitAccountForPayment(method: PaymentMethod, currency: OrderCurrency): keyof typeof ACC {
+  if (currency === "USD" && (method === "efectivo" || method === "mixto")) return "cajaUsd";
   switch (method) {
     case "efectivo":
       return "cajaCup";
@@ -114,6 +120,8 @@ export async function generatePurchaseEntry(input: {
   rate?: number | null;
   /** true = pagada de contado (sale de la caja del negocio); false = a crédito (cuentas por pagar). */
   paidCash?: boolean;
+  /** Moneda de pago del contado (USD → Caja USD 1120; CUP → Caja CUP 1110). */
+  paymentCurrency?: "CUP" | "USD";
   business: string | null;
   date: string;
   userId: string | null;
@@ -121,8 +129,10 @@ export async function generatePurchaseEntry(input: {
   try {
     if (input.total <= 0) return;
     if (await entryExists("compra", input.purchaseId)) return;
-    // Contado: el haber sale de la caja del negocio (1110). Crédito: cuentas por pagar (2100).
-    const creditCode = input.paidCash ? ACC.cajaCup : ACC.cxp;
+    // Contado: el haber sale de la caja del negocio según la moneda de pago
+    // (Caja USD 1120 o Caja CUP 1110). Crédito: cuentas por pagar (2100).
+    const cajaContado = input.paymentCurrency === "USD" ? ACC.cajaUsd : ACC.cajaCup;
+    const creditCode = input.paidCash ? cajaContado : ACC.cxp;
     const acc = await accountIdsByCode([ACC.inventario, creditCode]);
     const total = round2(input.total);
     const rate = input.rate ?? (await softRate());
@@ -163,6 +173,8 @@ export async function generateSaleEntry(input: {
   customerName: string | null;
   total: number;
   paymentMethod: PaymentMethod;
+  /** Moneda de cobro de la venta (orders.currency). USD efectivo → Caja USD. */
+  currency: OrderCurrency;
   origin: OrderOrigin;
   movementId: string | null;
   business: string | null;
@@ -190,7 +202,7 @@ export async function generateSaleEntry(input: {
     const cogsCupVenta = rate ? round2(cogsUsd * rate) : cogsCupHist;
     const tasaDiff = round2(cogsCupVenta - cogsCupHist);
 
-    const debitCode = ACC[debitAccountForPayment(input.paymentMethod)];
+    const debitCode = ACC[debitAccountForPayment(input.paymentMethod, input.currency)];
     const revenueCode = ACC[revenueAccountForOrigin(input.origin)];
     const needed = [debitCode, revenueCode];
     const hasCogs = cogsCupHist > 0 || cogsUsd > 0;
@@ -410,5 +422,52 @@ export async function generateCourierPayEntry(input: {
     });
   } catch (e) {
     console.error("[auto-accounting] generateCourierPayEntry falló:", e);
+  }
+}
+
+/**
+ * Merma de inventario: reconoce la pérdida como gasto (antes solo bajaba el
+ * stock sin dejar rastro contable ni en el cuadre).
+ *   Pérdida por merma (5320) DEBE / Inventario (1300) HABER, dual CUP/USD.
+ * El costo es el histórico de los lotes consumidos por FIFO (lib/costing.ts).
+ * Idempotente por (reference_type='merma', movementId).
+ */
+export async function generateMermaEntry(input: {
+  movementId: string;
+  /** Costo CUP histórico de los lotes consumidos. */
+  costCup: number;
+  /** Costo USD congelado de los lotes consumidos. */
+  costUsd: number;
+  business: string | null;
+  date: string;
+  userId: string | null;
+  /** Tasa USD→CUP del día (referencia del asiento). */
+  rate?: number | null;
+  notes?: string;
+}): Promise<void> {
+  try {
+    const cup = round2(input.costCup);
+    const usd = round2(input.costUsd);
+    if (cup <= 0 && usd <= 0) return;
+    if (await entryExists("merma", input.movementId)) return;
+    const acc = await accountIdsByCode([ACC.perdidaMerma, ACC.inventario]);
+    const rate = input.rate ?? (await softRate());
+    const desc = input.notes?.trim() ? input.notes.trim() : "Pérdida por merma";
+    const lines: JournalLineInput[] = [
+      { account_id: acc.get(ACC.perdidaMerma)!, debit: cup, credit: 0, debit_usd: usd, credit_usd: 0, description: desc },
+      { account_id: acc.get(ACC.inventario)!, debit: 0, credit: cup, debit_usd: 0, credit_usd: usd, description: "Salida de inventario por merma" },
+    ];
+    await createJournalEntry({
+      entry_date: input.date,
+      description: desc,
+      reference_type: "merma",
+      reference_id: input.movementId,
+      business: input.business,
+      exchange_rate: rate,
+      created_by: input.userId,
+      lines,
+    });
+  } catch (e) {
+    console.error("[auto-accounting] generateMermaEntry falló:", e);
   }
 }

@@ -128,7 +128,7 @@ export function PurchaseLineEditor({
                   </>
                 )}
                 <Input
-                  type="number" step="1" min={1} name="quantity" required
+                  type="number" step="any" min={0} name="quantity" required
                   value={r.quantity}
                   onChange={(e) => patch(r.uid, { quantity: e.target.value })}
                   placeholder="Cant."

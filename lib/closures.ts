@@ -252,6 +252,7 @@ export async function confirmDailyClosure(warehouseId: string, day: string, user
       customerName: o.customers?.name ?? null,
       total: Number(o.total_amount),
       paymentMethod: o.payment_method,
+      currency: o.currency,
       origin: o.origin,
       movementId: o.movement_id,
       business: preview.business_slug,
@@ -364,6 +365,8 @@ export type WeeklyTotals = {
   cogs_cup: number;
   profit_cup: number;
   commission_cup: number;
+  /** Costo de las mermas de la semana (pérdida de inventario). */
+  merma_cup: number;
   net_cup: number;
   order_count: number;
 };
@@ -385,7 +388,7 @@ export type WeeklyReport = {
   products: ClosureProductRow[];
 };
 
-function weekTotals(orders: ClosureOrderRaw[], pct: number): WeeklyTotals {
+function weekTotals(orders: ClosureOrderRaw[], pct: number, mermaCup: number): WeeklyTotals {
   let revenue = 0;
   let cogs = 0;
   for (const o of orders) {
@@ -394,14 +397,44 @@ function weekTotals(orders: ClosureOrderRaw[], pct: number): WeeklyTotals {
   }
   const profit = round2(revenue - cogs);
   const commission = round2(profit > 0 ? profit * (pct / 100) : 0);
+  const merma = round2(mermaCup);
   return {
     revenue_cup: round2(revenue),
     cogs_cup: round2(cogs),
     profit_cup: profit,
     commission_cup: commission,
-    net_cup: round2(profit - commission),
+    merma_cup: merma,
+    // El neto descuenta la comisión del vendedor Y la pérdida por merma.
+    net_cup: round2(profit - commission - merma),
     order_count: orders.length,
   };
+}
+
+/**
+ * Costo (CUP histórico) de las mermas registradas en un almacén dentro de un
+ * rango de días. Suma el consumo FIFO (quantity × unit_cost) de los movimientos
+ * de tipo 'merma' del almacén. Antes la merma no aparecía en ningún cuadre.
+ */
+async function fetchMermaCost(warehouseId: string, fromDay: string, toDayExclusive: string): Promise<number> {
+  const sb = getSupabase();
+  const { data: movs, error } = await sb
+    .from("inventory_movements")
+    .select("id")
+    .eq("type", "merma")
+    .eq("warehouse_from", warehouseId)
+    .gte("created_at", `${fromDay}T00:00:00Z`)
+    .lt("created_at", `${toDayExclusive}T00:00:00Z`);
+  if (error) throw error;
+  const ids = (movs ?? []).map((m) => m.id);
+  if (ids.length === 0) return 0;
+  const { data: cons, error: cErr } = await sb
+    .from("inventory_lot_consumptions")
+    .select("quantity, unit_cost")
+    .in("movement_id", ids);
+  if (cErr) throw cErr;
+  let cost = 0;
+  for (const c of cons ?? []) cost += Number(c.quantity) * Number(c.unit_cost);
+  return round2(cost);
 }
 
 /** Lunes (YYYY-MM-DD) de la semana que contiene el día dado. */
@@ -428,9 +461,11 @@ export async function weeklyReport(warehouseId: string, weekStart: string): Prom
 
   const prevStart = addDays(weekStart, -7);
   const endExclusive = addDays(weekStart, 7);
-  const [all, staff] = await Promise.all([
+  const [all, staff, mermaCurrent, mermaPrev] = await Promise.all([
     fetchConfirmedOrders(warehouseId, prevStart, endExclusive),
     getPointOfSaleStaff(warehouseId),
+    fetchMermaCost(warehouseId, weekStart, endExclusive),
+    fetchMermaCost(warehouseId, prevStart, weekStart),
   ]);
   const pct = staff?.commission_pct ?? 0;
 
@@ -469,8 +504,8 @@ export async function weeklyReport(warehouseId: string, weekStart: string): Prom
     warehouse_name: wh.name,
     week_start: weekStart,
     week_end: addDays(weekStart, 6),
-    totals: weekTotals(current, pct),
-    prev_totals: weekTotals(previous, pct),
+    totals: weekTotals(current, pct, mermaCurrent),
+    prev_totals: weekTotals(previous, pct, mermaPrev),
     by_day: byDay,
     suggestions: {
       top_seller: sold.length > 0 ? sold[0] : null,
