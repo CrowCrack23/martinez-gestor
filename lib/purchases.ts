@@ -5,7 +5,7 @@ import { createMovement } from "./inventory";
 import { generatePurchaseEntry } from "./auto-accounting";
 import { deleteEntriesByReference } from "./accounting";
 import { createCatalogProduct } from "./products";
-import { assertFreshRate } from "./currency";
+import { assertRateForDate } from "./currency";
 import type { PurchaseOrderStatus } from "./supabase-types";
 
 const TAG = "purchases";
@@ -153,6 +153,8 @@ export type PurchaseOrderDetail = {
   rate: number | null;
   /** Total en USD (moneda funcional) congelado. */
   total_usd: number | null;
+  /** Fecha de la operación (YYYY-MM-DD). */
+  operation_date: string;
   created_at: string;
   received_at: string | null;
   movement_id: string | null;
@@ -164,7 +166,7 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
   const { data, error } = await sb
     .from("purchase_orders")
     .select(
-      "id,code,status,supplier_id,warehouse_id,reference,notes,paid_cash,payment_currency,total_amount,rate,total_usd,created_at,received_at,movement_id,suppliers!inner(name),warehouses!inner(name,store_slug)",
+      "id,code,status,supplier_id,warehouse_id,reference,notes,paid_cash,payment_currency,total_amount,rate,total_usd,operation_date,created_at,received_at,movement_id,suppliers!inner(name),warehouses!inner(name,store_slug)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -214,6 +216,7 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
     total_amount: number;
     rate: number | null;
     total_usd: number | null;
+    operation_date: string;
     created_at: string;
     received_at: string | null;
     movement_id: string | null;
@@ -237,6 +240,7 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
     total_amount: Number(d.total_amount),
     rate: d.rate == null ? null : Number(d.rate),
     total_usd: d.total_usd == null ? null : Number(d.total_usd),
+    operation_date: d.operation_date,
     created_at: d.created_at,
     received_at: d.received_at,
     movement_id: d.movement_id,
@@ -253,12 +257,14 @@ export async function createPurchaseOrder(input: {
   paid_cash: boolean;
   /** Moneda del pago de contado (USD → Caja USD; CUP → Caja CUP). */
   payment_currency?: "CUP" | "USD";
+  /** Fecha de la operación (YYYY-MM-DD); congela la tasa vigente de ese día. */
+  operation_date: string;
   created_by: string | null;
   lines: PurchaseLineInput[];
 }): Promise<string> {
   if (input.lines.length === 0) throw new Error("La orden debe tener al menos una línea.");
-  // Tasa del día congelada en la orden (bloquea si está vieja).
-  const rate = await assertFreshRate();
+  // Tasa vigente en la FECHA de la operación (no la de hoy).
+  const rate = await assertRateForDate(input.operation_date);
   const lines = await resolveNewProducts(input.lines);
   const totalUsd = round2(lines.reduce((s, l) => s + l.quantity * l.unit_cost_usd, 0));
   const sb = getSupabase();
@@ -271,6 +277,7 @@ export async function createPurchaseOrder(input: {
       notes: input.notes,
       paid_cash: input.paid_cash,
       payment_currency: input.payment_currency ?? "USD",
+      operation_date: input.operation_date,
       rate,
       total_usd: totalUsd,
       created_by: input.created_by,
@@ -307,7 +314,7 @@ function round6(n: number): number {
 
 export async function updatePurchaseOrderHeader(
   id: string,
-  patch: { supplier_id?: string; warehouse_id?: string; reference?: string; notes?: string; paid_cash?: boolean; payment_currency?: "CUP" | "USD" },
+  patch: { supplier_id?: string; warehouse_id?: string; reference?: string; notes?: string; paid_cash?: boolean; payment_currency?: "CUP" | "USD"; operation_date?: string },
 ): Promise<void> {
   const sb = getSupabase();
   // Solo se permite si está en borrador (validado en el server action)
@@ -319,10 +326,11 @@ export async function updatePurchaseOrderHeader(
 export async function replacePurchaseOrderLines(
   id: string,
   inputLines: PurchaseLineInput[],
+  operationDate: string,
 ): Promise<void> {
   if (inputLines.length === 0) throw new Error("La orden debe tener al menos una línea.");
-  // Editar líneas re-congela la tasa del día (los costos USD son los pactados).
-  const rate = await assertFreshRate();
+  // Editar líneas re-congela la tasa vigente en la fecha de la operación.
+  const rate = await assertRateForDate(operationDate);
   const lines = await resolveNewProducts(inputLines);
   const totalUsd = round2(lines.reduce((s, l) => s + l.quantity * l.unit_cost_usd, 0));
   const sb = getSupabase();
@@ -361,6 +369,7 @@ export async function receivePurchaseOrder(id: string, userId: string): Promise<
     user_id: userId,
     notes: `Recepción ${po.code}${po.reference ? ` — fact. ${po.reference}` : ""}`,
     rate: po.rate,
+    operation_date: po.operation_date,
     lines: po.lines.map((l) => ({
       product_id: l.product_id,
       quantity: l.quantity,
@@ -392,7 +401,7 @@ export async function receivePurchaseOrder(id: string, userId: string): Promise<
     paidCash: po.paid_cash,
     paymentCurrency: po.payment_currency,
     business: po.warehouse_store,
-    date: new Date().toISOString().slice(0, 10),
+    date: po.operation_date,
     userId,
   });
   bust();

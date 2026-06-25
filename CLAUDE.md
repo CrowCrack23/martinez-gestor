@@ -76,8 +76,30 @@ tocar dinero. Reglas:
 - **Precisión dual (migración 0045):** los **costos/precios UNITARIOS** se guardan
   con **6 decimales** (`numeric(18,6)`; helper `round6`, inputs `step="any"`,
   display `formatUnit`). Los **totales/COGS/asientos** siguen a **2 decimales**
-  (son montos de dinero). Las **cantidades siguen enteras**.
+  (son montos de dinero).
+- **Cantidades con decimales (migración 0047):** las cantidades de inventario son
+  `numeric(18,3)` (insumos a granel, producción, compras, ventas) — ya **no son
+  enteras**. Inputs `step="any"`, display `formatQty`. La función `_stock_add` y el
+  RPC `confirm_pos_order` se recrearon con `numeric` (antes `integer` truncaba).
 - Sin tasa registrada → mostrar `—`, **nunca asumir tasa 1**.
+
+### Caja por moneda y asientos automáticos
+
+`lib/auto-accounting.ts` genera asientos (en borrador, idempotentes, best-effort)
+y **enruta el efectivo por moneda**:
+
+- Venta efectivo/mixto en **USD → Caja USD (1120)**; en CUP → Caja CUP (1110);
+  transferencia/tarjeta → Banco (1130). `generateSaleEntry` recibe `currency`.
+- Compra de contado según `purchase_orders.payment_currency` (USD→1120, CUP→1110);
+  a crédito → CxP (2100). Inversión fija (`addFixedAsset`) y aportes de socios
+  igual, por moneda.
+- **Merma**: `generateMermaEntry` → Pérdida por merma (5320) / Inventario (1300),
+  con el costo FIFO consumido; además entra restada en el **cuadre semanal**.
+- El **capital** (`lib/capital.ts`) lee efectivo del libro dual y el inventario de
+  la valuación FIFO (`stockValuation`), no del saldo contable de 1300.
+
+> Modelo completo en `docs/guia-uso-cliente.md` (guía del dueño) y en la memoria
+> persistente `money-model`.
 
 ## Asistente IA (Mastra, solo admin, solo lectura)
 
@@ -93,3 +115,39 @@ una API key en `.env.local`. Mastra va en `serverExternalPackages` (next.config)
 Editor de Supabase. Numeración continúa la de `martinez-global`. Al añadir
 esquema, crea una migración nueva (no edites las viejas) y mantenla idempotente
 (`create … if not exists`, `add column if not exists`, `drop policy if exists`).
+
+Última migración: **0051**. Pendientes de aplicar **en orden** (tocan la BD
+compartida con la APK — hacerlo en baja actividad): **0047** (cantidades a
+`numeric(18,3)`, recrea `_stock_add` y `confirm_pos_order`), **0048** (cuenta
+`5320 Pérdida por merma` + `purchase_orders.payment_currency`), **0049**
+(`operation_date` en compras/ventas/movimientos/remesas + `usd_rate_on(day)`;
+"todo por fechas"), **0050** (red de seguridad del plan de cuentas — garantiza
+que existan todas las cuentas que usa el código; resuelve "Faltan cuentas …") y
+**0051** (negocio `centro` + cuenta `1600 Inversión en centro`; Fase 1 del
+"centro de elaboración como negocio dentro del negocio") y **0052** (cuenta
+`4400 Ventas de producción` + `operation_date` en `production_orders`; Fase 2:
+producción con precio de transferencia) y **0053** (tabla `centro_closures`;
+Fase 3: cuadres propios del centro).
+
+### Centro de elaboración = negocio (Fases 1-3)
+
+El centro es el negocio `centro` (migración 0051; almacenes `centro_elaboracion`
+cuelgan de él). `transferCapitalToCentro` (capital.ts) lo funda con capital de la
+mipyme. En `produceOrder` (production.ts), si el almacén de la orden es del centro,
+el terminado pasa al **almacén central** a precio de transferencia **T = costo +
+33%·utilidad** (utilidad = `products.price` USD − costo); `generateCentroHandoffEntries`
+(auto-accounting.ts) genera los asientos: el centro vende (Caja/Ventas producción
+4400 + Costo/Inventario) y la mipyme compra (Inventario/Caja). Fase 3: el centro
+tiene cuadres propios (`/cuadres/centro`, lib `centro-closures.ts`, tabla
+`centro_closures`) basados en sus entregas de producción; al confirmar el cuadre
+diario paga el 33% de su ganancia a los obreros (asiento 5250/Caja en business
+centro). `CENTRO_WORKER_PCT=33`.
+
+### Operaciones por fecha (migración 0049)
+
+Cada compra/venta/movimiento/remesa lleva `operation_date` (elegible en el form).
+Congela la **tasa vigente en esa fecha** (`getRateForDate`/`assertRateForDate`, la
+más reciente con day ≤ fecha — sin la regla de frescura de 3 días). La fecha rige
+la tasa, el `entry_date` del asiento y el **cuadre** (closures.ts agrupa por
+`operation_date`). La APK (`confirm_pos_order`) sigue en tiempo real (toma el
+default `current_date`).

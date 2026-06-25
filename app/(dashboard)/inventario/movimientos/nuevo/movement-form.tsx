@@ -48,6 +48,18 @@ export function MovementForm({
         {help && <p className="text-xs text-muted-foreground">{help}</p>}
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="operation_date">Fecha *</Label>
+        <Input
+          id="operation_date"
+          name="operation_date"
+          type="date"
+          defaultValue={new Date().toISOString().slice(0, 10)}
+          required
+        />
+        <p className="text-xs text-muted-foreground">Congela la tasa USD→CUP vigente en esa fecha.</p>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label htmlFor="warehouse_from">Origen {needsFrom && <span className="text-destructive">*</span>}</Label>

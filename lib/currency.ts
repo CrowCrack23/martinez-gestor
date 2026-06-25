@@ -83,6 +83,42 @@ export function usdAt(amountCup: number, rate: number): number {
   return Math.round((amountCup / rate) * 100) / 100;
 }
 
+/**
+ * Tasa USD→CUP vigente en una fecha: la más reciente registrada en o antes de
+ * `day` (YYYY-MM-DD). Devuelve null si no había ninguna tasa en/antes de esa
+ * fecha. Espejo TS de usd_rate_on (migración 0049). Para operaciones fechadas
+ * (no se aplica la regla de frescura de 3 días — esa es para "la tasa de hoy").
+ */
+export const getRateForDate = unstable_cache(
+  async (day: string, from = "USD", to = "CUP"): Promise<number | null> => {
+    const sb = getSupabase();
+    const { data, error } = await sb
+      .from("exchange_rates")
+      .select("rate")
+      .eq("currency_from", from)
+      .eq("currency_to", to)
+      .lte("day", day)
+      .order("day", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? Number(data.rate) : null;
+  },
+  ["currency_rate_for_date"],
+  { revalidate: 60, tags: ["exchange_rates"] },
+);
+
+/** Tasa vigente en `day`, o error claro si no había ninguna en/antes de esa fecha. */
+export async function assertRateForDate(day: string): Promise<number> {
+  const rate = await getRateForDate(day);
+  if (rate == null || rate <= 0) {
+    throw new Error(
+      `No hay tasa USD→CUP registrada en o antes del ${day}. Registra la tasa de esa fecha en /remesas/tasas.`,
+    );
+  }
+  return rate;
+}
+
 /** Última tasa registrada from→to, o null si nunca se registró una. */
 export const getRate = unstable_cache(
   async (from: string, to = "CUP"): Promise<number | null> => {

@@ -11,7 +11,7 @@ import { Flash } from "@/components/flash";
 import { RateBanner } from "@/components/rate-banner";
 import { formatUsd } from "@/lib/currency";
 import { JOURNAL_STATUS_LABEL } from "@/lib/accounting";
-import { addFixedAssetAction, deleteCashMovementAction, deleteFixedAssetAction, recordCashMovementAction } from "./actions";
+import { addFixedAssetAction, deleteCashMovementAction, deleteFixedAssetAction, recordCashMovementAction, transferCapitalToCentroAction } from "./actions";
 
 type SP = Promise<{ business?: string; error?: string; success?: string }>;
 
@@ -249,6 +249,44 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
                 </table>
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Traspaso de capital al centro de elaboración */}
+      {isAdmin && (
+        <Card>
+          <CardContent className="pt-6 space-y-4">
+            <div>
+              <div className="font-medium">Traspaso de capital al centro de elaboración</div>
+              <div className="text-sm text-muted-foreground">
+                Funda el centro con dinero de la mipyme: baja la caja de la mipyme y sube la del centro
+                (su capital total no cambia, solo cambia de forma).
+              </div>
+            </div>
+            <form action={transferCapitalToCentroAction} className="flex flex-wrap items-end gap-3">
+              <input type="hidden" name="business_slug" value={business} />
+              <div className="space-y-1">
+                <Label htmlFor="transfer_amount" className="text-xs">Monto</Label>
+                <Input id="transfer_amount" name="amount" type="number" step="0.01" min="0.01" className="w-36" required />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="transfer_currency" className="text-xs">Moneda</Label>
+                <Select id="transfer_currency" name="currency" defaultValue="USD" className="w-24">
+                  <option value="USD">USD</option>
+                  <option value="CUP">CUP</option>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="transfer_date" className="text-xs">Fecha</Label>
+                <Input id="transfer_date" name="date" type="date" defaultValue={today} required />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="transfer_notes" className="text-xs">Concepto</Label>
+                <Input id="transfer_notes" name="notes" placeholder="Opcional" />
+              </div>
+              <Button type="submit" size="sm">Traspasar</Button>
+            </form>
           </CardContent>
         </Card>
       )}

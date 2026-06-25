@@ -5,7 +5,7 @@ import { createMovement } from "./inventory";
 import { movementCostDual } from "./costing";
 import { generateSaleEntry } from "./auto-accounting";
 import { deleteEntriesByReference } from "./accounting";
-import { assertFreshRate, priceCupFromUsd } from "./currency";
+import { assertRateForDate, priceCupFromUsd } from "./currency";
 import type { OrderCurrency, OrderOrigin, OrderStatus, PaymentMethod } from "./supabase-types";
 
 const TAG = "sales";
@@ -127,6 +127,7 @@ export type OrderDetail = {
   payment_status: string;
   amount_charged: number | null;
   charge_currency: string | null;
+  operation_date: string;
   created_at: string;
   confirmed_at: string | null;
   movement_id: string | null;
@@ -138,7 +139,7 @@ export async function getOrder(id: string, scope?: string[]): Promise<OrderDetai
   const { data, error } = await sb
     .from("orders")
     .select(
-      "id,code,status,origin,customer_id,warehouse_id,payment_method,currency,amount_usd,sale_rate,cogs_total,reference,notes,total_amount,payment_status,amount_charged,charge_currency,created_at,confirmed_at,movement_id,customers(name),warehouses!inner(name,store_slug)",
+      "id,code,status,origin,customer_id,warehouse_id,payment_method,currency,amount_usd,sale_rate,cogs_total,reference,notes,total_amount,payment_status,amount_charged,charge_currency,operation_date,created_at,confirmed_at,movement_id,customers(name),warehouses!inner(name,store_slug)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -150,6 +151,7 @@ export async function getOrder(id: string, scope?: string[]): Promise<OrderDetai
     currency: OrderCurrency; amount_usd: number | null; sale_rate: number | null; cogs_total: number;
     reference: string; notes: string; total_amount: number;
     payment_status: string; amount_charged: number | null; charge_currency: string | null;
+    operation_date: string;
     created_at: string; confirmed_at: string | null; movement_id: string | null;
     customers: { name: string } | null; warehouses: { name: string; store_slug: string | null } | null;
   };
@@ -199,6 +201,7 @@ export async function getOrder(id: string, scope?: string[]): Promise<OrderDetai
     payment_status: d.payment_status ?? "no_aplica",
     amount_charged: d.amount_charged != null ? Number(d.amount_charged) : null,
     charge_currency: d.charge_currency,
+    operation_date: d.operation_date,
     created_at: d.created_at,
     confirmed_at: d.confirmed_at,
     movement_id: d.movement_id,
@@ -214,6 +217,8 @@ export async function createOrder(input: {
   currency?: OrderCurrency;
   reference: string;
   notes: string;
+  /** Fecha de la operación (YYYY-MM-DD); por defecto, hoy. */
+  operation_date?: string;
   created_by: string | null;
   lines: OrderLineInput[];
 }): Promise<string> {
@@ -229,6 +234,7 @@ export async function createOrder(input: {
       currency: input.currency ?? "CUP",
       reference: input.reference,
       notes: input.notes,
+      operation_date: input.operation_date ?? new Date().toISOString().slice(0, 10),
       created_by: input.created_by,
     })
     .select("id")
@@ -261,6 +267,7 @@ export async function updateOrderHeader(
     currency?: OrderCurrency;
     reference?: string;
     notes?: string;
+    operation_date?: string;
   },
 ): Promise<void> {
   const sb = getSupabase();
@@ -293,9 +300,9 @@ export async function confirmOrder(id: string, userId: string): Promise<void> {
   if (o.status !== "borrador") throw new Error(`No se puede confirmar una orden en estado ${o.status}.`);
   if (o.lines.length === 0) throw new Error("La orden no tiene líneas.");
 
-  // USD funcional: tasa del día obligatoria (bloquea si está vieja) y precios
+  // USD funcional: tasa vigente en la FECHA de la venta (no la de hoy) y precios
   // recalculados desde el precio USD del producto (espejo de confirm_pos_order).
-  const rate = await assertFreshRate();
+  const rate = await assertRateForDate(o.operation_date);
 
   const productIds = Array.from(new Set(o.lines.map((l) => l.product_id)));
   const { data: prods, error: pErr } = await sb
@@ -333,6 +340,7 @@ export async function confirmOrder(id: string, userId: string): Promise<void> {
     reference_id: o.id,
     user_id: userId,
     notes: `Venta ${o.code}${o.reference ? ` — ref. ${o.reference}` : ""}`,
+    operation_date: o.operation_date,
     // Sin unit_cost: el costo real de la salida lo calcula el costeo FIFO por lotes.
     lines: o.lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity })),
   });
@@ -366,7 +374,7 @@ export async function confirmOrder(id: string, userId: string): Promise<void> {
     origin: o.origin,
     movementId,
     business: o.warehouse_store,
-    date: new Date().toISOString().slice(0, 10),
+    date: o.operation_date,
     userId,
     rate,
     amountUsd,

@@ -50,6 +50,11 @@ export default async function NuevaProduccionPage({ searchParams }: { searchPara
               <Input id="quantity" name="quantity" type="number" step="0.01" min={0.01} required defaultValue="1" />
               <p className="text-xs text-muted-foreground">Multiplica los insumos y el rendimiento de la receta.</p>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="operation_date">Fecha de la producción *</Label>
+              <Input id="operation_date" name="operation_date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required />
+              <p className="text-xs text-muted-foreground">Si es del centro, congela la tasa de esa fecha y fecha la entrega/pago.</p>
+            </div>
             <div className="space-y-2"><Label htmlFor="notes">Notas</Label><Textarea id="notes" name="notes" rows={2} /></div>
             <div className="flex gap-2 justify-end pt-2">
               <Button asChild variant="ghost"><Link href="/produccion">Cancelar</Link></Button>

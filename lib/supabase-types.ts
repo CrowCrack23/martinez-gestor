@@ -259,6 +259,7 @@ export type Database = {
           reference_id: string | null;
           user_id: string | null;
           notes: string;
+          operation_date: string;
           created_at: string;
         };
         Insert: {
@@ -270,6 +271,7 @@ export type Database = {
           reference_id?: string | null;
           user_id?: string | null;
           notes?: string;
+          operation_date?: string;
         };
         Update: never;
         Relationships: [];
@@ -320,6 +322,7 @@ export type Database = {
           received_by: string | null;
           received_at: string | null;
           movement_id: string | null;
+          operation_date: string;
           created_at: string;
           updated_at: string;
         };
@@ -335,6 +338,7 @@ export type Database = {
           payment_currency?: "CUP" | "USD";
           rate?: number | null;
           total_usd?: number | null;
+          operation_date?: string;
           created_by?: string | null;
         };
         Update: {
@@ -347,6 +351,7 @@ export type Database = {
           payment_currency?: "CUP" | "USD";
           rate?: number | null;
           total_usd?: number | null;
+          operation_date?: string;
           received_by?: string | null;
           received_at?: string | null;
           movement_id?: string | null;
@@ -431,6 +436,7 @@ export type Database = {
           sale_rate: number | null;
           cogs_total: number;
           cogs_usd: number;
+          operation_date: string;
           created_at: string;
           updated_at: string;
         };
@@ -453,6 +459,7 @@ export type Database = {
           currency?: OrderCurrency;
           amount_usd?: number | null;
           sale_rate?: number | null;
+          operation_date?: string;
         };
         Update: {
           customer_id?: string | null;
@@ -475,6 +482,7 @@ export type Database = {
           sale_rate?: number | null;
           cogs_total?: number;
           cogs_usd?: number;
+          operation_date?: string;
         };
         Relationships: [];
       };
@@ -542,6 +550,40 @@ export type Database = {
           order_count?: number;
           rate_used?: number | null;
           notes?: string;
+          closed_by?: string | null;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      // ── Cuadres del centro de elaboración (entregas de producción) ──
+      centro_closures: {
+        Row: {
+          id: string;
+          business_slug: string;
+          day: string;
+          revenue_cup: number;
+          cost_cup: number;
+          profit_cup: number;
+          worker_pct: number;
+          worker_pay_cup: number;
+          net_cup: number;
+          order_count: number;
+          rate_used: number | null;
+          closed_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_slug?: string;
+          day: string;
+          revenue_cup?: number;
+          cost_cup?: number;
+          profit_cup?: number;
+          worker_pct?: number;
+          worker_pay_cup?: number;
+          net_cup?: number;
+          order_count?: number;
+          rate_used?: number | null;
           closed_by?: string | null;
         };
         Update: never;
@@ -1007,17 +1049,20 @@ export type Database = {
           created_by: string | null; produced_by: string | null;
           produced_at: string | null;
           movement_in_id: string | null; movement_out_id: string | null;
+          operation_date: string;
           created_at: string; updated_at: string;
         };
         Insert: {
           id?: string; code?: string; bom_id: string; warehouse_id: string;
           quantity: number; notes?: string; created_by?: string | null;
+          operation_date?: string;
         };
         Update: {
           bom_id?: string; warehouse_id?: string; quantity?: number;
           status?: ProductionStatus; notes?: string;
           produced_by?: string | null; produced_at?: string | null;
           movement_in_id?: string | null; movement_out_id?: string | null;
+          operation_date?: string;
         };
         Relationships: [];
       };
@@ -1110,6 +1155,7 @@ export type Database = {
           delivery_cost_rate: number | null;
           profit_cup: number | null;
           courier_fee_cup: number;
+          operation_date: string;
           created_by: string | null; paid_by: string | null; paid_at: string | null;
           created_at: string; updated_at: string;
         };
@@ -1127,6 +1173,7 @@ export type Database = {
           gestor_id?: string | null;
           gestor_commission_usd?: number;
           courier_fee_cup?: number;
+          operation_date?: string;
           created_by?: string | null;
         };
         Update: {
@@ -1148,6 +1195,7 @@ export type Database = {
           delivery_cost_rate?: number | null;
           profit_cup?: number | null;
           courier_fee_cup?: number;
+          operation_date?: string;
           paid_by?: string | null; paid_at?: string | null;
         };
         Relationships: [];

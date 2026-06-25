@@ -52,6 +52,23 @@ export function optionalInt(form: FormData, key: string, label: string, opts?: {
   return n;
 }
 
+/** Fecha YYYY-MM-DD obligatoria (input type="date"). */
+export function requireDate(form: FormData, key: string, label: string): string {
+  const raw = form.get(key);
+  if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) {
+    throw new ValidationError(`${label} es obligatoria.`);
+  }
+  return raw.trim();
+}
+
+/** Fecha YYYY-MM-DD opcional; null si no viene. */
+export function optionalDate(form: FormData, key: string): string | null {
+  const raw = form.get(key);
+  if (typeof raw !== "string" || raw.trim() === "") return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) throw new ValidationError("Fecha inválida.");
+  return raw.trim();
+}
+
 export function requireEmail(form: FormData, key: string): string {
   const raw = requireString(form, key, "Email").toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {

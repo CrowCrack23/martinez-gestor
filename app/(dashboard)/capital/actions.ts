@@ -1,8 +1,8 @@
 "use server";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
-import { addFixedAsset, deleteCashMovement, deleteFixedAsset, recordCashMovement } from "@/lib/capital";
-import { optionalString, requireString, ValidationError } from "@/lib/validation";
+import { addFixedAsset, deleteCashMovement, deleteFixedAsset, recordCashMovement, transferCapitalToCentro } from "@/lib/capital";
+import { optionalString, requireDate, requireString, ValidationError } from "@/lib/validation";
 
 export async function addFixedAssetAction(formData: FormData) {
   const user = await requireRole(["admin"]);
@@ -74,4 +74,26 @@ export async function deleteCashMovementAction(id: string, business: string) {
     redirect(`/capital?business=${business}&error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
   }
   redirect(`/capital?business=${business}&success=Movimiento+eliminado`);
+}
+
+export async function transferCapitalToCentroAction(formData: FormData) {
+  const user = await requireRole(["admin"]);
+  const business = String(formData.get("business_slug") ?? "");
+  try {
+    const currency = String(formData.get("currency") ?? "CUP");
+    if (currency !== "CUP" && currency !== "USD") throw new ValidationError("Moneda inválida.");
+    const amount = Number(formData.get("amount") ?? 0);
+    if (!Number.isFinite(amount) || amount <= 0) throw new ValidationError("Monto inválido.");
+    await transferCapitalToCentro({
+      amount,
+      currency,
+      date: requireDate(formData, "date", "Fecha"),
+      notes: optionalString(formData, "notes"),
+      created_by: user.id,
+    });
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
+    redirect(`/capital?business=${business}&error=${encodeURIComponent(e instanceof Error ? e.message : "Error")}`);
+  }
+  redirect(`/capital?business=${business}&success=Traspaso+al+centro+registrado`);
 }

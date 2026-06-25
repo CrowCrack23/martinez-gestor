@@ -30,6 +30,7 @@ const ACC = {
   salariosPorPagar: "2300",
   ventasOnline: "4100",
   ventasTienda: "4200",
+  ventasProduccion: "4400",
   comisionesRemesas: "4300",
   diferenciaTasas: "4310",
   costoVentas: "5100",
@@ -469,5 +470,109 @@ export async function generateMermaEntry(input: {
     });
   } catch (e) {
     console.error("[auto-accounting] generateMermaEntry falló:", e);
+  }
+}
+
+/**
+ * Cuadre del centro confirmado: pago a los obreros (33% sobre la ganancia del
+ * centro del día). Comisiones de venta (5250) DEBE / Caja CUP HABER, en el libro
+ * del centro. Idempotente por (cuadre_centro, closureId). Best-effort.
+ */
+export async function generateCentroWorkerPayEntry(input: {
+  closureId: string;
+  day: string;
+  workerPayCup: number;
+  userId: string | null;
+}): Promise<void> {
+  try {
+    const pay = round2(input.workerPayCup);
+    if (pay <= 0) return;
+    if (await entryExists("cuadre_centro", input.closureId)) return;
+    const acc = await accountIdsByCode([ACC.comisionesVenta, ACC.cajaCup]);
+    const rate = await softRate();
+    await createJournalEntry({
+      entry_date: input.day,
+      description: `Pago a obreros — cuadre centro ${input.day}`,
+      reference_type: "cuadre_centro",
+      reference_id: input.closureId,
+      business: "centro",
+      exchange_rate: rate,
+      created_by: input.userId,
+      lines: [
+        { account_id: acc.get(ACC.comisionesVenta)!, debit: pay, credit: 0, description: "Pago a obreros del centro" },
+        { account_id: acc.get(ACC.cajaCup)!, debit: 0, credit: pay, description: "Pago a obreros del centro" },
+      ],
+    });
+  } catch (e) {
+    console.error("[auto-accounting] generateCentroWorkerPayEntry falló:", e);
+  }
+}
+
+/**
+ * Entrega de producción del centro al almacén central (maquila interna): el
+ * centro "vende" el terminado a la mipyme a precio de transferencia T (costo +
+ * 33% de utilidad) y la mipyme lo "compra" a su inventario. Dos asientos:
+ *   centro (business='centro'):
+ *     Caja CUP (debe T) / Ventas de producción 4400 (haber T)
+ *     Costo de ventas 5100 (debe C) / Inventario 1300 (haber C)
+ *   mipyme (business='mipyme'):
+ *     Inventario 1300 (debe T) / Caja CUP (haber T)
+ * Idempotente (referencia produccion_centro + id). Best-effort.
+ */
+export async function generateCentroHandoffEntries(input: {
+  productionId: string;
+  code: string;
+  /** Costo real de los insumos consumidos (CUP histórico + USD congelado). */
+  costCup: number;
+  costUsd: number;
+  /** Precio de transferencia = costo + 33% utilidad (CUP + USD). */
+  transferCup: number;
+  transferUsd: number;
+  date: string;
+  rate: number | null;
+  userId: string | null;
+}): Promise<void> {
+  try {
+    const T = round2(input.transferCup);
+    const Tusd = round2(input.transferUsd);
+    const C = round2(input.costCup);
+    const Cusd = round2(input.costUsd);
+    if (T <= 0) return;
+    if (await entryExists("produccion_centro", input.productionId)) return;
+    const acc = await accountIdsByCode([ACC.cajaCup, ACC.ventasProduccion, ACC.costoVentas, ACC.inventario]);
+
+    // Centro: cobra al almacén central (T) reconociendo venta y costo de insumos.
+    await createJournalEntry({
+      entry_date: input.date,
+      description: `Producción ${input.code} — entrega al almacén central`,
+      reference_type: "produccion_centro",
+      reference_id: input.productionId,
+      business: "centro",
+      exchange_rate: input.rate,
+      created_by: input.userId,
+      lines: [
+        { account_id: acc.get(ACC.cajaCup)!, debit: T, credit: 0, debit_usd: Tusd, credit_usd: 0, description: "Cobro al almacén central" },
+        { account_id: acc.get(ACC.ventasProduccion)!, debit: 0, credit: T, debit_usd: 0, credit_usd: Tusd, description: `Venta de producción ${input.code}` },
+        { account_id: acc.get(ACC.costoVentas)!, debit: C, credit: 0, debit_usd: Cusd, credit_usd: 0, description: "Costo de los insumos" },
+        { account_id: acc.get(ACC.inventario)!, debit: 0, credit: C, debit_usd: 0, credit_usd: Cusd, description: "Salida de insumos del centro" },
+      ],
+    });
+
+    // Mipyme: paga al centro (T) e ingresa el terminado a su inventario.
+    await createJournalEntry({
+      entry_date: input.date,
+      description: `Compra de producción ${input.code} al centro`,
+      reference_type: "produccion_centro_compra",
+      reference_id: input.productionId,
+      business: "mipyme",
+      exchange_rate: input.rate,
+      created_by: input.userId,
+      lines: [
+        { account_id: acc.get(ACC.inventario)!, debit: T, credit: 0, debit_usd: Tusd, credit_usd: 0, description: `Producto terminado ${input.code}` },
+        { account_id: acc.get(ACC.cajaCup)!, debit: 0, credit: T, debit_usd: 0, credit_usd: Tusd, description: "Pago al centro de elaboración" },
+      ],
+    });
+  } catch (e) {
+    console.error("[auto-accounting] generateCentroHandoffEntries falló:", e);
   }
 }

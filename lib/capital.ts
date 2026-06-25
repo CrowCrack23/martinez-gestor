@@ -4,7 +4,7 @@ import { getSupabase } from "./supabase";
 import { createJournalEntry, forceDeleteJournalEntry, trialBalance } from "./accounting";
 import { stockValuation } from "./costing";
 import { listWarehouses } from "./warehouses";
-import { getRate, assertFreshRate } from "./currency";
+import { getRate, assertRateForDate } from "./currency";
 import { listContributions } from "./partners";
 import type { Database, WarehouseType } from "./supabase-types";
 
@@ -30,8 +30,14 @@ const ACC_BANCO = "1130";
 const ACC_CXC = "1200";
 const ACC_CXP = "2100";
 const ACC_INFRA = "1500";
+const ACC_INV_CENTRO = "1600"; // inversión de la mipyme en el centro de elaboración
+const ACC_CAPITAL = "3100"; // capital social (lado del centro al recibir el traspaso)
 const ACC_OTROS_INGRESOS = "4900";
 const ACC_OTROS_GASTOS = "5400";
+
+/** Slugs de negocio del esquema "negocio dentro del negocio" (migración 0051). */
+export const BUSINESS_MIPYME = "mipyme";
+export const BUSINESS_CENTRO = "centro";
 
 export type CapitalSnapshot = {
   /** Última tasa USD→CUP registrada (null si no hay; los equivalentes quedan null). */
@@ -138,8 +144,13 @@ export async function capitalSnapshot(business: string): Promise<CapitalSnapshot
   const byWarehouse: CapitalSnapshot["inventory"]["byWarehouse"] = [];
   for (const w of warehouses) {
     const v = valueByWarehouse.get(w.id) ?? { cup: 0, usd: 0 };
-    const value = Math.round(v.cup * 100) / 100;
     const valueUsd = Math.round(v.usd * 100) / 100;
+    // CUP a la tasa ACTUAL (valor de reposición): costo USD congelado × tasa de
+    // hoy, igual que el efectivo USD. Lotes viejos sin USD caen al CUP histórico.
+    const value =
+      v.usd > 0 && usdRate != null && usdRate > 0
+        ? Math.round(v.usd * usdRate * 100) / 100
+        : Math.round(v.cup * 100) / 100;
     if (value !== 0 || valueUsd !== 0) {
       byWarehouse.push({ warehouse_id: w.id, name: w.name, type: w.type, value, valueUsd });
     }
@@ -210,8 +221,8 @@ export async function addFixedAsset(input: {
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Monto inválido.");
   const sb = getSupabase();
 
-  // Montos duales congelados a la tasa del día (bloquea si está vieja).
-  const rate = await assertFreshRate();
+  // Montos duales congelados a la tasa vigente en la FECHA de la inversión.
+  const rate = await assertRateForDate(input.acquired_at);
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const amountCup = input.currency === "USD" ? round2(input.amount * rate) : input.amount;
   const amountUsd = input.currency === "USD" ? input.amount : round2(input.amount / rate);
@@ -232,6 +243,10 @@ export async function addFixedAsset(input: {
     .single();
   if (error) throw error;
 
+  // El asiento que DESCUENTA la caja es obligatorio: sin él, la inversión queda
+  // registrada pero el dinero nunca sale de su caja. Si falla, se revierte el
+  // activo y se reporta el error real (no es best-effort, a diferencia de los
+  // asientos automáticos de venta/compra que sí pueden quedar pendientes).
   try {
     const cajaCode = input.currency === "USD" ? ACC_CAJA_USD : ACC_CAJA_CUP;
     const { data: accounts, error: aErr } = await sb
@@ -242,7 +257,7 @@ export async function addFixedAsset(input: {
     const byCode = new Map((accounts ?? []).map((a) => [a.code, a.id]));
     const infra = byCode.get(ACC_INFRA);
     const caja = byCode.get(cajaCode);
-    if (!infra || !caja) throw new Error(`Faltan cuentas ${ACC_INFRA}/${cajaCode} en el plan de cuentas.`);
+    if (!infra || !caja) throw new Error(`Faltan cuentas ${ACC_INFRA}/${cajaCode} en el plan de cuentas (aplicar migraciones 0031/0037).`);
     const entryId = await createJournalEntry({
       entry_date: input.acquired_at,
       description: `Infraestructura — ${input.name}`,
@@ -258,7 +273,11 @@ export async function addFixedAsset(input: {
     });
     await sb.from("fixed_assets").update({ journal_entry_id: entryId }).eq("id", data.id);
   } catch (e) {
-    console.error("[capital] asiento de activo fijo falló:", e);
+    // Revertir el activo: o entra con su asiento (caja descontada), o no entra.
+    await sb.from("fixed_assets").delete().eq("id", data.id);
+    throw e instanceof Error
+      ? new Error(`No se pudo descontar la inversión de la caja: ${e.message}`)
+      : new Error("No se pudo registrar el asiento de la inversión.");
   }
   bust();
 }
@@ -323,8 +342,8 @@ export async function recordCashMovement(input: {
     throw new Error(`Faltan cuentas ${cajaCode}/${otherCode} en el plan de cuentas (aplicar migración 0037).`);
   }
 
-  // Montos duales congelados a la tasa del día (bloquea si está vieja).
-  const rate = await assertFreshRate();
+  // Montos duales congelados a la tasa vigente en la FECHA del movimiento.
+  const rate = await assertRateForDate(input.date);
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const amountCup = input.currency === "USD" ? round2(input.amount * rate) : input.amount;
   const amountUsd = input.currency === "USD" ? input.amount : round2(input.amount / rate);
@@ -396,5 +415,85 @@ export const listCashMovements = unstable_cache(
  */
 export async function deleteCashMovement(entryId: string): Promise<void> {
   await forceDeleteJournalEntry(entryId);
+  bust();
+}
+
+// ── Traspaso de capital mipyme → centro de elaboración (Fase 1) ───────────
+
+/**
+ * Traspaso de capital de la mipyme al centro de elaboración: la mipyme convierte
+ * caja en "inversión en centro" (su capital total no cambia, solo de forma) y el
+ * centro recibe ese efectivo como capital propio. Dos asientos, uno por libro,
+ * atómicos (si el segundo falla, se revierte el primero):
+ *   mipyme: Inversión en centro (1600) DEBE / Caja (1110|1120) HABER
+ *   centro: Caja (1110|1120) DEBE / Capital social (3100) HABER
+ * El monto se captura en CUP o USD; la tasa de la FECHA congela el otro lado.
+ */
+export async function transferCapitalToCentro(input: {
+  amount: number;
+  currency: "CUP" | "USD";
+  date: string;
+  notes?: string;
+  created_by: string | null;
+}): Promise<void> {
+  if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Monto inválido.");
+  const sb = getSupabase();
+  const cajaCode = input.currency === "USD" ? ACC_CAJA_USD : ACC_CAJA_CUP;
+  const { data: accounts, error } = await sb
+    .from("accounts")
+    .select("id, code")
+    .in("code", [ACC_INV_CENTRO, ACC_CAPITAL, cajaCode]);
+  if (error) throw error;
+  const byCode = new Map((accounts ?? []).map((a) => [a.code, a.id]));
+  const invCentro = byCode.get(ACC_INV_CENTRO);
+  const capital = byCode.get(ACC_CAPITAL);
+  const caja = byCode.get(cajaCode);
+  if (!invCentro || !capital || !caja) {
+    throw new Error(`Faltan cuentas ${ACC_INV_CENTRO}/${ACC_CAPITAL}/${cajaCode} en el plan de cuentas (aplicar migraciones 0050/0051).`);
+  }
+
+  const rate = await assertRateForDate(input.date);
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const amountCup = input.currency === "USD" ? round2(input.amount * rate) : input.amount;
+  const amountUsd = input.currency === "USD" ? input.amount : round2(input.amount / rate);
+  const ref = crypto.randomUUID();
+  const concept = input.notes?.trim() ? input.notes.trim() : "Traspaso de capital al centro";
+
+  // 1) Mipyme: caja → inversión en centro.
+  const mipymeEntry = await createJournalEntry({
+    entry_date: input.date,
+    description: `Traspaso de capital al centro — ${concept}`,
+    reference_type: "traspaso_centro",
+    reference_id: ref,
+    business: BUSINESS_MIPYME,
+    exchange_rate: rate,
+    created_by: input.created_by,
+    lines: [
+      { account_id: invCentro, debit: amountCup, credit: 0, debit_usd: amountUsd, credit_usd: 0, description: "Inversión en centro de elaboración" },
+      { account_id: caja, debit: 0, credit: amountCup, debit_usd: 0, credit_usd: amountUsd, description: `Salida de caja (${input.currency})` },
+    ],
+  });
+
+  // 2) Centro: recibe el efectivo como capital. Si falla, revertir el de mipyme.
+  try {
+    await createJournalEntry({
+      entry_date: input.date,
+      description: `Capital recibido de la mipyme — ${concept}`,
+      reference_type: "traspaso_centro",
+      reference_id: ref,
+      business: BUSINESS_CENTRO,
+      exchange_rate: rate,
+      created_by: input.created_by,
+      lines: [
+        { account_id: caja, debit: amountCup, credit: 0, debit_usd: amountUsd, credit_usd: 0, description: `Entrada de caja (${input.currency})` },
+        { account_id: capital, debit: 0, credit: amountCup, debit_usd: 0, credit_usd: amountUsd, description: "Capital aportado por la mipyme" },
+      ],
+    });
+  } catch (e) {
+    await forceDeleteJournalEntry(mipymeEntry);
+    throw e instanceof Error
+      ? new Error(`No se pudo completar el traspaso: ${e.message}`)
+      : new Error("No se pudo completar el traspaso.");
+  }
   bust();
 }

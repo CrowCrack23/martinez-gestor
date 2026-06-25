@@ -29,6 +29,7 @@ export default async function NuevaCompraPage({ searchParams }: { searchParams: 
   ]);
   const activeSuppliers = suppliers.filter((s) => s.active);
   const activeWarehouses = warehouses.filter((w) => w.active);
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -61,6 +62,11 @@ export default async function NuevaCompraPage({ searchParams }: { searchParams: 
                   <option value="">— Selecciona —</option>
                   {activeWarehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="operation_date">Fecha de la compra *</Label>
+                <Input id="operation_date" name="operation_date" type="date" defaultValue={today} required />
+                <p className="text-xs text-muted-foreground">Congela la tasa USD→CUP vigente en esa fecha.</p>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -44,9 +44,14 @@ export default async function CuadresPage({ searchParams }: { searchParams: SP }
             y desglose del dinero. Al confirmar se congela y se descuenta la comisión.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href={`/cuadres/semanal${warehouseId ? `?warehouse=${warehouseId}` : ""}`}>Cuadre semanal →</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/cuadres/centro">Cuadre del centro →</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={`/cuadres/semanal${warehouseId ? `?warehouse=${warehouseId}` : ""}`}>Cuadre semanal →</Link>
+          </Button>
+        </div>
       </div>
       <Flash success={sp.success} error={sp.error} />
 

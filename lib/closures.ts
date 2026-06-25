@@ -48,6 +48,7 @@ type ClosureOrderRaw = {
   cogs_total: number;
   cogs_usd: number;
   confirmed_at: string;
+  operation_date: string;
   movement_id: string | null;
   customers: { name: string } | null;
   order_lines: {
@@ -64,16 +65,18 @@ async function fetchConfirmedOrders(
   toDayExclusive: string,
 ): Promise<ClosureOrderRaw[]> {
   const sb = getSupabase();
+  // Se agrupa por operation_date (fecha de la venta elegida), no por el momento
+  // de confirmación: así una venta fechada en el pasado cuenta en su día real.
   const { data, error } = await sb
     .from("orders")
     .select(
-      "id,code,origin,payment_method,currency,amount_usd,sale_rate,total_amount,cogs_total,cogs_usd,confirmed_at,movement_id,customers(name),order_lines(product_id,quantity,line_total,products(name))",
+      "id,code,origin,payment_method,currency,amount_usd,sale_rate,total_amount,cogs_total,cogs_usd,confirmed_at,operation_date,movement_id,customers(name),order_lines(product_id,quantity,line_total,products(name))",
     )
     .eq("warehouse_id", warehouseId)
     .eq("status", "confirmada")
-    .gte("confirmed_at", `${fromDay}T00:00:00Z`)
-    .lt("confirmed_at", `${toDayExclusive}T00:00:00Z`)
-    .order("confirmed_at");
+    .gte("operation_date", fromDay)
+    .lt("operation_date", toDayExclusive)
+    .order("operation_date");
   if (error) throw error;
   return (data ?? []) as unknown as ClosureOrderRaw[];
 }
@@ -469,8 +472,8 @@ export async function weeklyReport(warehouseId: string, weekStart: string): Prom
   ]);
   const pct = staff?.commission_pct ?? 0;
 
-  const current = all.filter((o) => o.confirmed_at >= `${weekStart}T00:00:00`);
-  const previous = all.filter((o) => o.confirmed_at < `${weekStart}T00:00:00`);
+  const current = all.filter((o) => o.operation_date >= weekStart);
+  const previous = all.filter((o) => o.operation_date < weekStart);
 
   // Totales por día de la semana actual.
   const byDayMap = new Map<string, { revenue: number; profit: number; count: number }>();
@@ -478,7 +481,7 @@ export async function weeklyReport(warehouseId: string, weekStart: string): Prom
     byDayMap.set(addDays(weekStart, i), { revenue: 0, profit: 0, count: 0 });
   }
   for (const o of current) {
-    const day = o.confirmed_at.slice(0, 10);
+    const day = o.operation_date;
     const cur = byDayMap.get(day);
     if (!cur) continue;
     cur.revenue += Number(o.total_amount);

@@ -2,7 +2,7 @@ import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { createJournalEntry, forceDeleteJournalEntry } from "./accounting";
-import { assertFreshRate } from "./currency";
+import { assertRateForDate } from "./currency";
 import type { Database } from "./supabase-types";
 
 // Socios por negocio (migración 0029) y aportes de capital (0030).
@@ -189,7 +189,9 @@ export async function addContribution(input: {
     .single();
   if (error) throw error;
 
-  // Asiento best-effort (patrón lib/auto-accounting.ts): no bloquea el aporte.
+  // El asiento que SUMA a la caja es obligatorio: sin él, el aporte queda
+  // registrado pero el dinero nunca entra a la caja. Si falla, se revierte el
+  // aporte y se reporta el error real.
   try {
     const cajaCode = input.currency === "USD" ? ACC_CAJA_USD : ACC_CAJA_CUP;
     const { data: accounts, error: aErr } = await sb
@@ -203,8 +205,8 @@ export async function addContribution(input: {
     if (!caja || !capital) throw new Error("Faltan cuentas 1110/1120/3100 en el plan de cuentas.");
     const { data: partner } = await sb.from("business_partners").select("name").eq("id", input.partner_id).maybeSingle();
     const who = partner?.name ?? "socio";
-    // Asiento dual (USD funcional): la tasa del día congela el otro lado.
-    const rate = await assertFreshRate();
+    // Asiento dual (USD funcional): la tasa vigente en la FECHA del aporte congela el otro lado.
+    const rate = await assertRateForDate(input.contributed_at);
     const r2 = (n: number) => Math.round(n * 100) / 100;
     const amountCup = input.currency === "USD" ? r2(input.amount * rate) : input.amount;
     const amountUsd = input.currency === "USD" ? input.amount : r2(input.amount / rate);
@@ -223,7 +225,11 @@ export async function addContribution(input: {
     });
     await sb.from("capital_contributions").update({ journal_entry_id: entryId }).eq("id", data.id);
   } catch (e) {
-    console.error("[partners] asiento de aporte falló:", e);
+    // Revertir el aporte: o entra con su asiento (caja sumada), o no entra.
+    await sb.from("capital_contributions").delete().eq("id", data.id);
+    throw e instanceof Error
+      ? new Error(`No se pudo sumar el aporte a la caja: ${e.message}`)
+      : new Error("No se pudo registrar el asiento del aporte.");
   }
   bust();
 }

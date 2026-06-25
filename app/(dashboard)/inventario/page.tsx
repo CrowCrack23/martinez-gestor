@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission, businessScope } from "@/lib/auth";
 import { listStock } from "@/lib/inventory";
 import { stockValuation } from "@/lib/costing";
+import { getCurrentRate } from "@/lib/currency";
 import { listWarehouses } from "@/lib/warehouses";
 import { listStoresLite } from "@/lib/stores-lite";
 import { Card } from "@/components/ui/card";
@@ -22,16 +23,28 @@ export default async function InventarioPage({ searchParams }: { searchParams: S
     lowOnly: sp.low === "1",
     scope,
   };
-  const [rows, warehouses, stores, valuation] = await Promise.all([
+  const [rows, warehouses, stores, valuation, rateInfo] = await Promise.all([
     listStock(filter),
     listWarehouses(scope),
     listStoresLite(),
     stockValuation(),
+    getCurrentRate(),
   ]);
+
+  // Costo/valor en CUP a la tasa ACTUAL (valor de reposición): costo USD
+  // congelado del lote × tasa de hoy. Así el costo en CUP se mueve con la tasa.
+  // Lotes viejos sin USD congelado (value_usd = 0) caen al CUP histórico.
+  const rate = rateInfo?.rate ?? null;
+  const costAtRate = (key: string): { avg: number; value: number } | null => {
+    const v = valuation[key];
+    if (!v) return null;
+    const value = v.value_usd > 0 && rate != null ? v.value_usd * rate : v.value;
+    return { avg: v.qty > 0 ? value / v.qty : 0, value };
+  };
 
   const lowCount = rows.filter((r) => r.quantity <= r.min_stock).length;
   const totalValue = rows.reduce(
-    (s, r) => s + (valuation[`${r.product_id}::${r.warehouse_id}`]?.value ?? 0),
+    (s, r) => s + (costAtRate(`${r.product_id}::${r.warehouse_id}`)?.value ?? 0),
     0,
   );
 
@@ -40,7 +53,9 @@ export default async function InventarioPage({ searchParams }: { searchParams: S
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Inventario</h1>
-          <p className="text-sm text-muted-foreground">Stock por producto y almacén.</p>
+          <p className="text-sm text-muted-foreground">
+            Stock por producto y almacén. Costo y valor en CUP a la tasa actual{rate != null ? ` (${rate})` : " (sin tasa)"}.
+          </p>
         </div>
         <div className="flex gap-2">
           <Button asChild variant="outline">
@@ -110,7 +125,7 @@ export default async function InventarioPage({ searchParams }: { searchParams: S
             )}
             {rows.map((r) => {
               const low = r.quantity <= r.min_stock;
-              const val = valuation[`${r.product_id}::${r.warehouse_id}`];
+              const val = costAtRate(`${r.product_id}::${r.warehouse_id}`);
               return (
                 <tr key={`${r.product_id}-${r.warehouse_id}`} className="border-b last:border-b-0 hover:bg-muted/30">
                   <td className="px-4 py-3 font-medium">{r.product_name}</td>
@@ -121,7 +136,7 @@ export default async function InventarioPage({ searchParams }: { searchParams: S
                     {formatQty(r.quantity)}
                   </td>
                   <td className="px-4 py-3 text-right text-muted-foreground font-mono">{formatNumber(r.min_stock)}</td>
-                  <td className="px-4 py-3 text-right text-muted-foreground font-mono">{val ? formatPrice(val.avg_cost) : "—"}</td>
+                  <td className="px-4 py-3 text-right text-muted-foreground font-mono">{val ? formatPrice(val.avg) : "—"}</td>
                   <td className="px-4 py-3 text-right font-mono">{val ? formatPrice(val.value) : "—"}</td>
                 </tr>
               );

@@ -6,7 +6,7 @@ import {
   replaceOrderLines, undoConfirmOrder, updateOrderHeader, type OrderLineInput,
 } from "@/lib/sales";
 import type { OrderCurrency, OrderOrigin, PaymentMethod } from "@/lib/supabase-types";
-import { optionalString, requireString, ValidationError } from "@/lib/validation";
+import { optionalString, requireDate, requireString, ValidationError } from "@/lib/validation";
 
 const ORIGINS: OrderOrigin[] = ["online", "pos", "whatsapp", "otro"];
 const METHODS: PaymentMethod[] = ["efectivo", "transferencia", "tarjeta", "mixto", "otro"];
@@ -59,6 +59,7 @@ export async function createOrderAction(formData: FormData) {
       currency: parseCurrency(formData.get("currency")),
       reference: optionalString(formData, "reference"),
       notes: optionalString(formData, "notes"),
+      operation_date: requireDate(formData, "operation_date", "Fecha"),
       created_by: user.id,
       lines: parseLines(formData),
     });
@@ -80,6 +81,7 @@ export async function updateOrderAction(id: string, formData: FormData) {
       currency: parseCurrency(formData.get("currency")),
       reference: optionalString(formData, "reference"),
       notes: optionalString(formData, "notes"),
+      operation_date: requireDate(formData, "operation_date", "Fecha"),
     });
     await replaceOrderLines(id, parseLines(formData));
   } catch (e) {

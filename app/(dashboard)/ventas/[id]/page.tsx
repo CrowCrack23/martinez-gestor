@@ -182,6 +182,10 @@ export default async function VentaDetallePage({ params, searchParams }: { param
                 <Label htmlFor="reference">Ref. externa</Label>
                 <Input id="reference" name="reference" defaultValue={o.reference} />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="operation_date">Fecha de la venta *</Label>
+                <Input id="operation_date" name="operation_date" type="date" defaultValue={o.operation_date} required />
+              </div>
             </div>
             <OrderLineEditor
               products={products}

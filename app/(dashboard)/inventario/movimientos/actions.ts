@@ -2,9 +2,9 @@
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createMovement, type MovementLine } from "@/lib/inventory";
-import { getCurrentRate } from "@/lib/currency";
+import { getRateForDate } from "@/lib/currency";
 import type { InventoryMovementType } from "@/lib/supabase-types";
-import { optionalString, ValidationError } from "@/lib/validation";
+import { optionalString, requireDate, ValidationError } from "@/lib/validation";
 
 const TYPES: InventoryMovementType[] = ["entrada", "salida", "transferencia", "ajuste", "merma"];
 
@@ -53,15 +53,17 @@ export async function createMovementAction(formData: FormData) {
     }
     if (lines.length === 0) throw new ValidationError("Agrega al menos una línea válida.");
 
-    // Tasa del día para congelar el USD de los lotes de entrada/ajuste.
-    const current = await getCurrentRate();
+    // Tasa vigente en la FECHA del movimiento para congelar el USD de los lotes.
+    const operationDate = requireDate(formData, "operation_date", "Fecha");
+    const rate = await getRateForDate(operationDate);
     await createMovement({
       type,
       warehouse_from: warehouseFrom,
       warehouse_to: warehouseTo,
       user_id: user.id,
       notes: optionalString(formData, "notes"),
-      rate: current && !current.stale ? current.rate : null,
+      rate,
+      operation_date: operationDate,
       lines,
     });
   } catch (e) {

@@ -3,7 +3,16 @@ import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { createMovement } from "./inventory";
 import { movementCostDual } from "./costing";
+import { assertRateForDate } from "./currency";
+import { generateCentroHandoffEntries } from "./auto-accounting";
+import { forceDeleteJournalEntry } from "./accounting";
 import type { Database, ProductionStatus } from "./supabase-types";
+
+/** Negocio del centro de elaboración y % de la utilidad que recibe (maquila interna). */
+const BUSINESS_CENTRO = "centro";
+const CENTRO_PROFIT_PCT = 0.33;
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 
 const TAG = "production";
 function bust() {
@@ -151,11 +160,23 @@ export async function getProductionOrder(id: string): Promise<ProductionOrderWit
 }
 
 export async function createProductionOrder(input: {
-  bom_id: string; warehouse_id: string; quantity: number; notes: string; created_by: string | null;
+  bom_id: string; warehouse_id: string; quantity: number; notes: string;
+  operation_date?: string; created_by: string | null;
 }): Promise<string> {
   if (input.quantity <= 0) throw new Error("La cantidad debe ser mayor a 0.");
   const sb = getSupabase();
-  const { data, error } = await sb.from("production_orders").insert(input).select("id").single();
+  const { data, error } = await sb
+    .from("production_orders")
+    .insert({
+      bom_id: input.bom_id,
+      warehouse_id: input.warehouse_id,
+      quantity: input.quantity,
+      notes: input.notes,
+      operation_date: input.operation_date ?? new Date().toISOString().slice(0, 10),
+      created_by: input.created_by,
+    })
+    .select("id")
+    .single();
   if (error) throw error;
   bust();
   return data.id;
@@ -195,29 +216,92 @@ export async function produceOrder(id: string, userId: string): Promise<void> {
     reference_id: po.id,
     user_id: userId,
     notes: `Consumo insumos producción ${po.code}`,
+    operation_date: po.operation_date,
     lines: outLines,
   });
 
-  // El costo del producto terminado = costo real de los insumos / unidades
-  // producidas, en ambas monedas (el USD viene congelado de los lotes consumidos).
+  // Costo real de los insumos consumidos (CUP histórico + USD congelado).
   const inputCost = await movementCostDual(movOut);
-  const finishedUnitCost = producedQty > 0 ? inputCost.cost / producedQty : 0;
-  const finishedUnitCostUsd = producedQty > 0 ? inputCost.cost_usd / producedQty : 0;
-  const movIn = await createMovement({
-    type: "entrada",
-    warehouse_from: null,
-    warehouse_to: po.warehouse_id,
-    reference_type: "produccion",
-    reference_id: po.id,
-    user_id: userId,
-    notes: `Producción ${po.code} — ${bom.name}`,
-    lines: [{
-      product_id: bom.product_id,
-      quantity: producedQty,
-      unit_cost: finishedUnitCost,
-      unit_cost_usd: finishedUnitCostUsd,
-    }],
-  });
+
+  // ¿Es producción del CENTRO DE ELABORACIÓN? Si sí, el terminado pasa al almacén
+  // central a precio de transferencia (costo + 33% de utilidad) y la mipyme le
+  // paga al centro. Si no, comportamiento clásico: entra al mismo almacén a costo.
+  const { data: wh } = await sb.from("warehouses").select("store_slug").eq("id", po.warehouse_id).maybeSingle();
+  const isCentro = wh?.store_slug === BUSINESS_CENTRO;
+
+  let movIn: string;
+  if (isCentro) {
+    const { data: central, error: cErr } = await sb
+      .from("warehouses")
+      .select("id")
+      .eq("type", "almacen_central")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (cErr) throw cErr;
+    if (!central) throw new Error("No hay un almacén central configurado para recibir la producción del centro.");
+
+    // Precio de catálogo del terminado (USD) para calcular la utilidad.
+    const { data: prod, error: pErr } = await sb.from("products").select("price").eq("id", bom.product_id).maybeSingle();
+    if (pErr) throw pErr;
+    const priceUsd = prod?.price != null ? Number(prod.price) : 0;
+    if (priceUsd <= 0) {
+      throw new Error(`El producto terminado "${po.finished_product_name}" no tiene precio USD; ponlo en /productos antes de producir en el centro.`);
+    }
+
+    const rate = await assertRateForDate(po.operation_date);
+
+    // Utilidad y precio de transferencia (USD funcional): T = costo + 33%·utilidad.
+    const costUsdTotal = inputCost.cost_usd;
+    const costCupTotal = inputCost.cost;
+    const utilUsdTotal = Math.max(0, priceUsd * producedQty - costUsdTotal);
+    const transferUsdTotal = round2(costUsdTotal + CENTRO_PROFIT_PCT * utilUsdTotal);
+    const transferCupTotal = round2(transferUsdTotal * rate);
+    const unitCostUsd = producedQty > 0 ? round6(transferUsdTotal / producedQty) : 0;
+    const unitCost = round6(unitCostUsd * rate);
+
+    // El terminado entra al ALMACÉN CENTRAL costeado al precio de transferencia.
+    movIn = await createMovement({
+      type: "entrada",
+      warehouse_from: null,
+      warehouse_to: central.id,
+      reference_type: "produccion",
+      reference_id: po.id,
+      user_id: userId,
+      notes: `Producción ${po.code} — ${bom.name} (entrega del centro)`,
+      rate,
+      operation_date: po.operation_date,
+      lines: [{ product_id: bom.product_id, quantity: producedQty, unit_cost: unitCost, unit_cost_usd: unitCostUsd }],
+    });
+
+    // Asientos en ambos libros: el centro vende; la mipyme paga y recibe inventario.
+    await generateCentroHandoffEntries({
+      productionId: po.id,
+      code: po.code,
+      costCup: costCupTotal,
+      costUsd: costUsdTotal,
+      transferCup: transferCupTotal,
+      transferUsd: transferUsdTotal,
+      date: po.operation_date,
+      rate,
+      userId,
+    });
+  } else {
+    // El costo del terminado = costo real de los insumos / unidades producidas.
+    const finishedUnitCost = producedQty > 0 ? inputCost.cost / producedQty : 0;
+    const finishedUnitCostUsd = producedQty > 0 ? inputCost.cost_usd / producedQty : 0;
+    movIn = await createMovement({
+      type: "entrada",
+      warehouse_from: null,
+      warehouse_to: po.warehouse_id,
+      reference_type: "produccion",
+      reference_id: po.id,
+      user_id: userId,
+      notes: `Producción ${po.code} — ${bom.name}`,
+      operation_date: po.operation_date,
+      lines: [{ product_id: bom.product_id, quantity: producedQty, unit_cost: finishedUnitCost, unit_cost_usd: finishedUnitCostUsd }],
+    });
+  }
 
   const { error } = await sb.from("production_orders").update({
     status: "producida",
@@ -317,7 +401,19 @@ export async function undoProduceOrder(id: string): Promise<void> {
   const { error: dmoErr } = await sb.from("inventory_movements").delete().eq("id", po.movement_out_id);
   if (dmoErr) throw dmoErr;
 
-  // 4. Devuelve la orden a borrador.
+  // 4. Si fue una entrega del centro, borra los asientos de la maquila interna
+  //    (venta del centro + compra de la mipyme) para revertir caja y libros.
+  const { data: centroEntries, error: ceErr } = await sb
+    .from("journal_entries")
+    .select("id")
+    .in("reference_type", ["produccion_centro", "produccion_centro_compra"])
+    .eq("reference_id", id);
+  if (ceErr) throw ceErr;
+  for (const e of centroEntries ?? []) {
+    await forceDeleteJournalEntry(e.id);
+  }
+
+  // 5. Devuelve la orden a borrador.
   const { error: poErr } = await sb
     .from("production_orders")
     .update({ status: "borrador", produced_by: null, produced_at: null, movement_in_id: null, movement_out_id: null })

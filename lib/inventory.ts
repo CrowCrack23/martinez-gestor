@@ -105,12 +105,15 @@ export async function createMovement(input: {
   reference_id?: string | null;
   user_id?: string | null;
   notes?: string;
-  /** Tasa USD→CUP del día; se usa para derivar/registrar el USD de los lotes de entrada. */
+  /** Tasa USD→CUP; se usa para derivar/registrar el USD de los lotes de entrada. */
   rate?: number | null;
+  /** Fecha de la operación (YYYY-MM-DD). Por defecto, hoy. */
+  operation_date?: string;
   lines: MovementLine[];
 }): Promise<string> {
   if (input.lines.length === 0) throw new Error("El movimiento debe tener al menos una línea.");
   const sb = getSupabase();
+  const operationDate = input.operation_date ?? new Date().toISOString().slice(0, 10);
   const { data: mov, error } = await sb
     .from("inventory_movements")
     .insert({
@@ -121,6 +124,7 @@ export async function createMovement(input: {
       reference_id: input.reference_id ?? null,
       user_id: input.user_id ?? null,
       notes: input.notes ?? "",
+      operation_date: operationDate,
     })
     .select("id")
     .single();
@@ -245,7 +249,7 @@ export async function createMovement(input: {
       costCup: mermaCost,
       costUsd: mermaCostUsd,
       business: wh?.store_slug ?? null,
-      date: new Date().toISOString().slice(0, 10),
+      date: operationDate,
       userId: input.user_id ?? null,
       rate: input.rate ?? null,
       notes: input.notes?.trim() || undefined,

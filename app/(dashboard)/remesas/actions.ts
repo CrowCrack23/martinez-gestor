@@ -6,7 +6,7 @@ import {
   updateRemittance, upsertExchangeRate, deleteExchangeRate, getRemittance,
 } from "@/lib/remittances";
 import type { RemittancePayoutMethod, RemittanceOrigin } from "@/lib/supabase-types";
-import { optionalString, requireString, ValidationError } from "@/lib/validation";
+import { optionalString, requireDate, requireString, ValidationError } from "@/lib/validation";
 
 const METHODS: RemittancePayoutMethod[] = ["efectivo", "tarjeta_cup", "transferencia", "otro"];
 function parseMethod(v: FormDataEntryValue | null): RemittancePayoutMethod {
@@ -44,6 +44,7 @@ function parseFields(form: FormData) {
     notes: optionalString(form, "notes"),
     assigned_to: optionalString(form, "assigned_to") || null,
     courier_fee_cup: parseCourierFee(form),
+    operation_date: requireDate(form, "operation_date", "Fecha"),
   };
 }
 

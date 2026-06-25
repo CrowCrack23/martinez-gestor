@@ -59,6 +59,8 @@ export async function createRemittance(input: {
   notes: string;
   assigned_to?: string | null;
   courier_fee_cup?: number;
+  /** Fecha de la operación (YYYY-MM-DD); por defecto, hoy. */
+  operation_date?: string;
   created_by: string | null;
 }): Promise<string> {
   const sb = getSupabase();
@@ -145,7 +147,7 @@ export async function payRemittance(id: string, userId: string, delivery?: Remit
     origin: r.origin,
     commissionCup,
     spreadCup,
-    date: new Date().toISOString().slice(0, 10),
+    date: r.operation_date ?? new Date().toISOString().slice(0, 10),
     userId,
     rate: Number(r.exchange_rate) || null,
   });

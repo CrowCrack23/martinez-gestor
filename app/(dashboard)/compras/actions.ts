@@ -11,7 +11,7 @@ import {
   updatePurchaseOrderHeader,
   type PurchaseLineInput,
 } from "@/lib/purchases";
-import { optionalString, requireString, ValidationError } from "@/lib/validation";
+import { optionalString, requireDate, requireString, ValidationError } from "@/lib/validation";
 
 function parseOptionalPrice(raw: string, label: string, line: number): number | null {
   if (raw.trim() === "") return null;
@@ -76,6 +76,7 @@ export async function createPurchaseOrderAction(formData: FormData) {
       notes: optionalString(formData, "notes"),
       paid_cash: formData.get("payment") === "contado",
       payment_currency: formData.get("payment_currency") === "CUP" ? "CUP" : "USD",
+      operation_date: requireDate(formData, "operation_date", "Fecha"),
       created_by: user.id,
       lines: parseLines(formData),
     });
@@ -90,6 +91,7 @@ export async function createPurchaseOrderAction(formData: FormData) {
 export async function updatePurchaseOrderAction(id: string, formData: FormData) {
   await requireRole(["admin", "almacenero"]);
   try {
+    const operationDate = requireDate(formData, "operation_date", "Fecha");
     await updatePurchaseOrderHeader(id, {
       supplier_id: requireString(formData, "supplier_id", "Proveedor"),
       warehouse_id: requireString(formData, "warehouse_id", "Almacén"),
@@ -97,8 +99,9 @@ export async function updatePurchaseOrderAction(id: string, formData: FormData) 
       notes: optionalString(formData, "notes"),
       paid_cash: formData.get("payment") === "contado",
       payment_currency: formData.get("payment_currency") === "CUP" ? "CUP" : "USD",
+      operation_date: operationDate,
     });
-    await replacePurchaseOrderLines(id, parseLines(formData));
+    await replacePurchaseOrderLines(id, parseLines(formData), operationDate);
   } catch (e) {
     if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
     const msg = e instanceof Error ? e.message : "Error";

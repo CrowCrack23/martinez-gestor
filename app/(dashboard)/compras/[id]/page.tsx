@@ -170,6 +170,10 @@ export default async function CompraDetallePage({ params, searchParams }: { para
                 <Input id="reference" name="reference" defaultValue={po.reference} />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="operation_date">Fecha de la compra *</Label>
+                <Input id="operation_date" name="operation_date" type="date" defaultValue={po.operation_date} required />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="payment">Forma de pago *</Label>
                 <Select id="payment" name="payment" required defaultValue={po.paid_cash ? "contado" : "credito"}>
                   <option value="credito">A crédito (cuentas por pagar)</option>

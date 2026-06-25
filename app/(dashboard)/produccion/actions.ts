@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/auth";
 import {
   cancelProductionOrder, createProductionOrder, deleteProductionOrder, produceOrder, undoProduceOrder,
 } from "@/lib/production";
-import { optionalString, requireString, ValidationError } from "@/lib/validation";
+import { optionalString, requireDate, requireString, ValidationError } from "@/lib/validation";
 
 export async function createProductionOrderAction(formData: FormData) {
   const user = await requireRole(["admin", "almacenero"]);
@@ -16,6 +16,7 @@ export async function createProductionOrderAction(formData: FormData) {
       warehouse_id: requireString(formData, "warehouse_id", "Almacén"),
       quantity: qty,
       notes: optionalString(formData, "notes"),
+      operation_date: requireDate(formData, "operation_date", "Fecha"),
       created_by: user.id,
     });
     redirect(`/produccion/${id}?success=Orden+creada`);

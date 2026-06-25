@@ -28,6 +28,7 @@ export default async function NuevaVentaPage({ searchParams }: { searchParams: S
   ]);
   const activeWarehouses = warehouses.filter((w) => w.active);
   const activeCustomers = customers.filter((c) => c.active);
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -84,6 +85,11 @@ export default async function NuevaVentaPage({ searchParams }: { searchParams: S
               <div className="space-y-2">
                 <Label htmlFor="reference">Ref. externa</Label>
                 <Input id="reference" name="reference" placeholder="Nº pedido web, etc." />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="operation_date">Fecha de la venta *</Label>
+                <Input id="operation_date" name="operation_date" type="date" defaultValue={today} required />
+                <p className="text-xs text-muted-foreground">Usa la tasa vigente de esa fecha y cuenta en el cuadre de ese día.</p>
               </div>
             </div>
             <OrderLineEditor products={products} rate={rate && !rate.stale ? rate.rate : null} />

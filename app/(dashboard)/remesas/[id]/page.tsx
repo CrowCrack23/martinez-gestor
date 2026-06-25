@@ -140,7 +140,13 @@ export default async function RemesaDetallePage({ params, searchParams }: { para
                   <p className="text-xs text-muted-foreground">Por esta entrega; se liquida en el cuadre semanal.</p>
                 </div>
               </div>
-              <div className="space-y-2"><Label htmlFor="notes">Notas</Label><Textarea id="notes" name="notes" rows={2} defaultValue={r.notes} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="operation_date">Fecha de la remesa *</Label>
+                  <Input id="operation_date" name="operation_date" type="date" defaultValue={r.operation_date} required />
+                </div>
+                <div className="space-y-2"><Label htmlFor="notes">Notas</Label><Textarea id="notes" name="notes" rows={2} defaultValue={r.notes} /></div>
+              </div>
               <div className="flex gap-2 justify-end pt-2">
                 <Button asChild variant="ghost"><Link href="/remesas">Cancelar</Link></Button>
                 <Button type="submit" variant="outline">Guardar cambios</Button>

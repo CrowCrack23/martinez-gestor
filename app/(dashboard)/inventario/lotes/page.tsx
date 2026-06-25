@@ -5,7 +5,7 @@ import { listWarehouses } from "@/lib/warehouses";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import { formatPrice, formatDateTime, formatQty } from "@/lib/format";
+import { formatPrice, formatDateTime, formatQty, formatUnit } from "@/lib/format";
 import { Flash } from "@/components/flash";
 import { setOpeningLotCostAction } from "./actions";
 
@@ -30,6 +30,7 @@ export default async function LotesPage({ searchParams }: { searchParams: SP }) 
   ]);
 
   const totalValue = lots.reduce((s, l) => s + l.qty_remaining * l.unit_cost, 0);
+  const totalValueUsd = lots.reduce((s, l) => s + l.qty_remaining * l.unit_cost_usd, 0);
 
   return (
     <div className="space-y-6">
@@ -76,13 +77,15 @@ export default async function LotesPage({ searchParams }: { searchParams: SP }) 
               <th className="px-4 py-3 font-medium">Origen</th>
               <th className="px-4 py-3 font-medium text-right">Recibido</th>
               <th className="px-4 py-3 font-medium text-right">Saldo</th>
-              <th className="px-4 py-3 font-medium text-right">Costo unit.</th>
-              <th className="px-4 py-3 font-medium text-right">Valor saldo</th>
+              <th className="px-4 py-3 font-medium text-right">Costo unit. CUP</th>
+              <th className="px-4 py-3 font-medium text-right">Costo USD</th>
+              <th className="px-4 py-3 font-medium text-right">Valor saldo CUP</th>
+              <th className="px-4 py-3 font-medium text-right">Valor saldo USD</th>
             </tr>
           </thead>
           <tbody>
             {lots.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Sin lotes.</td></tr>
+              <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">Sin lotes.</td></tr>
             )}
             {lots.map((l) => {
               const editable = l.source_type === "inicial" && l.qty_remaining === l.qty_received;
@@ -108,7 +111,9 @@ export default async function LotesPage({ searchParams }: { searchParams: SP }) 
                       <span className="font-mono">{formatPrice(l.unit_cost)}</span>
                     )}
                   </td>
+                  <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatUnit(l.unit_cost_usd)} USD</td>
                   <td className="px-4 py-3 text-right font-mono">{formatPrice(l.qty_remaining * l.unit_cost)}</td>
+                  <td className="px-4 py-3 text-right font-mono">{formatUnit(l.qty_remaining * l.unit_cost_usd)} USD</td>
                 </tr>
               );
             })}
@@ -116,8 +121,9 @@ export default async function LotesPage({ searchParams }: { searchParams: SP }) 
           {lots.length > 0 && (
             <tfoot className="border-t">
               <tr>
-                <td colSpan={7} className="px-4 py-3 text-right text-sm text-muted-foreground">Valor total de saldos</td>
+                <td colSpan={8} className="px-4 py-3 text-right text-sm text-muted-foreground">Valor total de saldos</td>
                 <td className="px-4 py-3 text-right font-mono font-semibold">{formatPrice(totalValue)}</td>
+                <td className="px-4 py-3 text-right font-mono font-semibold">{formatUnit(totalValueUsd)} USD</td>
               </tr>
             </tfoot>
           )}
