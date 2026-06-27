@@ -20,6 +20,14 @@ function parseOptionalPrice(raw: string, label: string, line: number): number | 
   return Math.round(n * 1e6) / 1e6; // precios/costos unitarios: hasta 6 decimales
 }
 
+function parseFreight(form: FormData): number {
+  const raw = form.get("freight_usd");
+  if (raw == null || String(raw).trim() === "") return 0;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) throw new ValidationError("Gasto de transportación inválido.");
+  return Math.round(n * 1e6) / 1e6;
+}
+
 function parseLines(form: FormData): PurchaseLineInput[] {
   const modes = form.getAll("line_mode").map(String);
   const productIds = form.getAll("product_id").map(String);
@@ -77,6 +85,7 @@ export async function createPurchaseOrderAction(formData: FormData) {
       paid_cash: formData.get("payment") === "contado",
       payment_currency: formData.get("payment_currency") === "CUP" ? "CUP" : "USD",
       operation_date: requireDate(formData, "operation_date", "Fecha"),
+      freight_usd: parseFreight(formData),
       created_by: user.id,
       lines: parseLines(formData),
     });
@@ -100,6 +109,7 @@ export async function updatePurchaseOrderAction(id: string, formData: FormData) 
       paid_cash: formData.get("payment") === "contado",
       payment_currency: formData.get("payment_currency") === "CUP" ? "CUP" : "USD",
       operation_date: operationDate,
+      freight_usd: parseFreight(formData),
     });
     await replacePurchaseOrderLines(id, parseLines(formData), operationDate);
   } catch (e) {

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, businessScope } from "@/lib/auth";
 import { listBoms } from "@/lib/production";
 import { listWarehouses } from "@/lib/warehouses";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,8 @@ import { createProductionOrderAction } from "../actions";
 type SP = Promise<{ error?: string }>;
 
 export default async function NuevaProduccionPage({ searchParams }: { searchParams: SP }) {
-  await requirePermission("produccion");
-  const [boms, warehouses, sp] = await Promise.all([listBoms(), listWarehouses(), searchParams]);
+  const user = await requirePermission("produccion");
+  const [boms, warehouses, sp] = await Promise.all([listBoms(), listWarehouses(businessScope(user)), searchParams]);
   const activeBoms = boms.filter((b) => b.active);
   const activeWh = warehouses.filter((w) => w.active);
 

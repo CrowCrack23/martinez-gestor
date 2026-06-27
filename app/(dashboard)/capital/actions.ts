@@ -5,7 +5,7 @@ import { addFixedAsset, deleteCashMovement, deleteFixedAsset, recordCashMovement
 import { optionalString, requireDate, requireString, ValidationError } from "@/lib/validation";
 
 export async function addFixedAssetAction(formData: FormData) {
-  const user = await requireRole(["admin"]);
+  const user = await requireRole(["admin", "gerente"]);
   const business = String(formData.get("business_slug") ?? "");
   try {
     const amount = Number(formData.get("amount") ?? 0);
@@ -29,7 +29,7 @@ export async function addFixedAssetAction(formData: FormData) {
 }
 
 export async function deleteFixedAssetAction(id: string, business: string) {
-  await requireRole(["admin"]);
+  await requireRole(["admin", "gerente"]);
   try {
     await deleteFixedAsset(id);
   } catch (e) {
@@ -40,7 +40,7 @@ export async function deleteFixedAssetAction(id: string, business: string) {
 }
 
 export async function recordCashMovementAction(formData: FormData) {
-  const user = await requireRole(["admin", "contador"]);
+  const user = await requireRole(["admin", "gerente", "contador"]);
   const business = String(formData.get("business_slug") ?? "");
   try {
     const kind = String(formData.get("kind") ?? "");
@@ -66,7 +66,7 @@ export async function recordCashMovementAction(formData: FormData) {
 }
 
 export async function deleteCashMovementAction(id: string, business: string) {
-  await requireRole(["admin", "contador"]);
+  await requireRole(["admin", "gerente", "contador"]);
   try {
     await deleteCashMovement(id);
   } catch (e) {
@@ -77,7 +77,10 @@ export async function deleteCashMovementAction(id: string, business: string) {
 }
 
 export async function transferCapitalToCentroAction(formData: FormData) {
-  const user = await requireRole(["admin"]);
+  // Solo la mipyme funda el centro: admin global o gerente de la mipyme. El
+  // traspaso siempre es mipyme→centro (origen fijo), así que ningún otro negocio
+  // puede transferir al centro.
+  const user = await requireRole(["admin", "gerente"]);
   const business = String(formData.get("business_slug") ?? "");
   try {
     const currency = String(formData.get("currency") ?? "CUP");

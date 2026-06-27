@@ -88,6 +88,11 @@ export default async function NuevaCompraPage({ searchParams }: { searchParams: 
                   <option value="CUP">CUP (sale de la Caja CUP)</option>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="freight_usd">Gasto de transportación (USD)</Label>
+                <Input id="freight_usd" name="freight_usd" type="number" step="any" min={0} placeholder="0" />
+                <p className="text-xs text-muted-foreground">Se reparte y se suma al costo de los productos al recibir.</p>
+              </div>
             </div>
             <PurchaseLineEditor products={products} rate={rate && !rate.stale ? rate.rate : null} />
             <div className="space-y-2">

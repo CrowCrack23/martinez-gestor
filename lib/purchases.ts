@@ -153,6 +153,8 @@ export type PurchaseOrderDetail = {
   rate: number | null;
   /** Total en USD (moneda funcional) congelado. */
   total_usd: number | null;
+  /** Gasto de transportación (USD) que se suma al costo al recibir. */
+  freight_usd: number;
   /** Fecha de la operación (YYYY-MM-DD). */
   operation_date: string;
   created_at: string;
@@ -166,7 +168,7 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
   const { data, error } = await sb
     .from("purchase_orders")
     .select(
-      "id,code,status,supplier_id,warehouse_id,reference,notes,paid_cash,payment_currency,total_amount,rate,total_usd,operation_date,created_at,received_at,movement_id,suppliers!inner(name),warehouses!inner(name,store_slug)",
+      "id,code,status,supplier_id,warehouse_id,reference,notes,paid_cash,payment_currency,total_amount,rate,total_usd,freight_usd,operation_date,created_at,received_at,movement_id,suppliers!inner(name),warehouses!inner(name,store_slug)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -216,6 +218,7 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
     total_amount: number;
     rate: number | null;
     total_usd: number | null;
+    freight_usd: number | null;
     operation_date: string;
     created_at: string;
     received_at: string | null;
@@ -240,6 +243,7 @@ export async function getPurchaseOrder(id: string, scope?: string[]): Promise<Pu
     total_amount: Number(d.total_amount),
     rate: d.rate == null ? null : Number(d.rate),
     total_usd: d.total_usd == null ? null : Number(d.total_usd),
+    freight_usd: d.freight_usd == null ? 0 : Number(d.freight_usd),
     operation_date: d.operation_date,
     created_at: d.created_at,
     received_at: d.received_at,
@@ -259,6 +263,8 @@ export async function createPurchaseOrder(input: {
   payment_currency?: "CUP" | "USD";
   /** Fecha de la operación (YYYY-MM-DD); congela la tasa vigente de ese día. */
   operation_date: string;
+  /** Gasto de transportación (USD) que se suma al costo al recibir. */
+  freight_usd?: number;
   created_by: string | null;
   lines: PurchaseLineInput[];
 }): Promise<string> {
@@ -278,6 +284,7 @@ export async function createPurchaseOrder(input: {
       paid_cash: input.paid_cash,
       payment_currency: input.payment_currency ?? "USD",
       operation_date: input.operation_date,
+      freight_usd: input.freight_usd ?? 0,
       rate,
       total_usd: totalUsd,
       created_by: input.created_by,
@@ -314,7 +321,7 @@ function round6(n: number): number {
 
 export async function updatePurchaseOrderHeader(
   id: string,
-  patch: { supplier_id?: string; warehouse_id?: string; reference?: string; notes?: string; paid_cash?: boolean; payment_currency?: "CUP" | "USD"; operation_date?: string },
+  patch: { supplier_id?: string; warehouse_id?: string; reference?: string; notes?: string; paid_cash?: boolean; payment_currency?: "CUP" | "USD"; operation_date?: string; freight_usd?: number },
 ): Promise<void> {
   const sb = getSupabase();
   // Solo se permite si está en borrador (validado en el server action)
@@ -370,6 +377,8 @@ export async function receivePurchaseOrder(id: string, userId: string): Promise<
     notes: `Recepción ${po.code}${po.reference ? ` — fact. ${po.reference}` : ""}`,
     rate: po.rate,
     operation_date: po.operation_date,
+    // El flete se reparte al costo de los lotes (landed cost).
+    freight_usd: po.freight_usd,
     lines: po.lines.map((l) => ({
       product_id: l.product_id,
       quantity: l.quantity,
@@ -390,13 +399,14 @@ export async function receivePurchaseOrder(id: string, userId: string): Promise<
   if (error) throw error;
 
   // Asiento contable automático (borrador): Inventario / Cuentas por pagar,
-  // con el USD congelado de la orden.
+  // con el USD congelado de la orden + el flete (que también se capitaliza).
+  const freightCup = po.rate ? round2(po.freight_usd * po.rate) : 0;
   await generatePurchaseEntry({
     purchaseId: po.id,
     code: po.code,
     supplierName: po.supplier_name,
-    total: po.total_amount,
-    totalUsd: po.total_usd,
+    total: round2(po.total_amount + freightCup),
+    totalUsd: po.total_usd != null ? round2(po.total_usd + po.freight_usd) : null,
     rate: po.rate,
     paidCash: po.paid_cash,
     paymentCurrency: po.payment_currency,

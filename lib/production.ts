@@ -118,11 +118,15 @@ export type ProductionOrderWithRefs = ProductionOrder & {
 };
 
 export const listProductionOrders = unstable_cache(
-  async (): Promise<ProductionOrderWithRefs[]> => {
+  async (scope?: string[]): Promise<ProductionOrderWithRefs[]> => {
     const sb = getSupabase();
-    const { data, error } = await sb.from("production_orders")
-      .select("*, bills_of_materials!inner(name, product_id, products!inner(name)), warehouses!inner(name)")
+    let q = sb.from("production_orders")
+      .select("*, bills_of_materials!inner(name, product_id, products!inner(name)), warehouses!inner(name, store_slug)")
       .order("created_at", { ascending: false });
+    // Alcance por negocio: limita a las órdenes cuyos almacenes pertenecen a las
+    // tiendas del usuario (el operador del centro solo ve la producción del centro).
+    if (scope) q = q.in("warehouses.store_slug", scope);
+    const { data, error } = await q;
     if (error) throw error;
     type R = ProductionOrder & {
       bills_of_materials: { name: string; product_id: string; products: { name: string } | null } | null;

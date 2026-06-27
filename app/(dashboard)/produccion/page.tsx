@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, businessScope } from "@/lib/auth";
 import { listProductionOrders, PRODUCTION_STATUS_BADGE, PRODUCTION_STATUS_LABEL } from "@/lib/production";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,8 +10,8 @@ import { formatDateTime } from "@/lib/format";
 type SP = Promise<{ success?: string; error?: string }>;
 
 export default async function ProduccionPage({ searchParams }: { searchParams: SP }) {
-  await requirePermission("produccion");
-  const [orders, sp] = await Promise.all([listProductionOrders(), searchParams]);
+  const user = await requirePermission("produccion");
+  const [orders, sp] = await Promise.all([listProductionOrders(businessScope(user)), searchParams]);
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

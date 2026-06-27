@@ -57,7 +57,16 @@ Tres dimensiones, no las confundas:
    propia por negocio (`ROPA-2026-00001`, `REM-…`).
 3. **Remesas por membresía.** Los roles `encargado_remesas / gestor / mensajero`
    se asignan **por negocio** en `business_members` (no como roles globales). El
-   `mensajero` solo ve las remesas asignadas a él.
+   `mensajero` solo ve las remesas asignadas a él. **Solo** esos roles (+admin)
+   ven remesas: `vendedor` y `contador` ya NO tienen el permiso.
+
+Roles añadidos (migración 0054): **`centro`** (operador del centro: recetas,
+producción, inventario, movimientos, lotes, contabilidad, cuadres — con
+user_businesses=`centro` ve solo el centro) y **`gerente`** (admin de la mipyme:
+toda la operación menos usuarios/remesas/asistente, con user_businesses=
+`{mipyme,centro}`). El traspaso de capital al centro lo pueden hacer `admin` y
+`gerente`. Para acotar un vendedor a su tienda, basta asignarle ese negocio en
+`/usuarios` (el alcance ya filtra ventas/inventario/etc.).
 
 ## Moneda: USD como moneda funcional (rectora)
 
@@ -126,8 +135,10 @@ que existan todas las cuentas que usa el código; resuelve "Faltan cuentas …")
 **0051** (negocio `centro` + cuenta `1600 Inversión en centro`; Fase 1 del
 "centro de elaboración como negocio dentro del negocio") y **0052** (cuenta
 `4400 Ventas de producción` + `operation_date` en `production_orders`; Fase 2:
-producción con precio de transferencia) y **0053** (tabla `centro_closures`;
-Fase 3: cuadres propios del centro).
+producción con precio de transferencia), **0053** (tabla `centro_closures`;
+Fase 3: cuadres propios del centro), **0054** (roles `centro` y `gerente`) y
+**0055** (`freight_usd` en compras/movimientos: gasto de transportación que se
+capitaliza al costo).
 
 ### Centro de elaboración = negocio (Fases 1-3)
 

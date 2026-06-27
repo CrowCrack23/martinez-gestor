@@ -137,6 +137,14 @@ export function MovementForm({
         )}
       </div>
 
+      {type === "entrada" && (
+        <div className="space-y-2">
+          <Label htmlFor="freight_usd">Gasto de transportación (USD)</Label>
+          <Input id="freight_usd" name="freight_usd" type="number" step="any" min={0} placeholder="0" />
+          <p className="text-xs text-muted-foreground">Se reparte y se suma al costo de los productos de esta entrada.</p>
+        </div>
+      )}
+
       <div className="space-y-2">
         <Label htmlFor="notes">Notas</Label>
         <Textarea id="notes" name="notes" rows={2} placeholder="Referencia, motivo, observaciones..." />

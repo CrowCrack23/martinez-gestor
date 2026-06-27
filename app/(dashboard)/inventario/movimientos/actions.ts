@@ -56,6 +56,9 @@ export async function createMovementAction(formData: FormData) {
     // Tasa vigente en la FECHA del movimiento para congelar el USD de los lotes.
     const operationDate = requireDate(formData, "operation_date", "Fecha");
     const rate = await getRateForDate(operationDate);
+    // Gasto de transportación (USD): solo aplica a entradas (se suma al costo).
+    const freightRaw = Number(formData.get("freight_usd") ?? 0);
+    if (!Number.isFinite(freightRaw) || freightRaw < 0) throw new ValidationError("Gasto de transportación inválido.");
     await createMovement({
       type,
       warehouse_from: warehouseFrom,
@@ -64,6 +67,7 @@ export async function createMovementAction(formData: FormData) {
       notes: optionalString(formData, "notes"),
       rate,
       operation_date: operationDate,
+      freight_usd: type === "entrada" ? freightRaw : 0,
       lines,
     });
   } catch (e) {

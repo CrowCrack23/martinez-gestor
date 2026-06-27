@@ -174,6 +174,10 @@ export default async function CompraDetallePage({ params, searchParams }: { para
                 <Input id="operation_date" name="operation_date" type="date" defaultValue={po.operation_date} required />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="freight_usd">Gasto de transportación (USD)</Label>
+                <Input id="freight_usd" name="freight_usd" type="number" step="any" min={0} defaultValue={po.freight_usd || ""} placeholder="0" />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="payment">Forma de pago *</Label>
                 <Select id="payment" name="payment" required defaultValue={po.paid_cash ? "contado" : "credito"}>
                   <option value="credito">A crédito (cuentas por pagar)</option>

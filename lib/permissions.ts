@@ -50,9 +50,11 @@ export type RemesasRole = (typeof REMESAS_ROLES)[number];
 
 export type RoleId =
   | "admin"
+  | "gerente"
   | "almacenero"
   | "vendedor"
   | "contador"
+  | "centro"
   | "rrhh"
   | "mensajero"
   | "gestor"
@@ -66,6 +68,29 @@ const ALL = "*" as const;
  */
 export const ROLE_PERMISSIONS: Record<RoleId, Permission[] | typeof ALL> = {
   admin: ALL,
+  // Gerente de la mipyme: toda la operación de mipyme+centro (su alcance lo da
+  // user_businesses). Sin usuarios, sin remesas, sin asistente IA.
+  gerente: [
+    "productos",
+    "inventario",
+    "movimientos",
+    "lotes",
+    "almacenes",
+    "proveedores",
+    "compras",
+    "ventas",
+    "cuadres",
+    "puntos_venta",
+    "clientes",
+    "empleados",
+    "asistencia",
+    "nomina",
+    "recetas",
+    "produccion",
+    "contabilidad",
+    "socios",
+    "capital",
+  ],
   almacenero: [
     "productos",
     "inventario",
@@ -77,7 +102,7 @@ export const ROLE_PERMISSIONS: Record<RoleId, Permission[] | typeof ALL> = {
     "recetas",
     "produccion",
   ],
-  vendedor: ["inventario", "ventas", "cuadres", "clientes", "remesas"],
+  vendedor: ["inventario", "ventas", "cuadres", "clientes"],
   contador: [
     "lotes",
     "proveedores",
@@ -86,10 +111,11 @@ export const ROLE_PERMISSIONS: Record<RoleId, Permission[] | typeof ALL> = {
     "cuadres",
     "clientes",
     "nomina",
-    "remesas",
     "contabilidad",
     "capital",
   ],
+  // Operador del centro de elaboración (alcance = negocio 'centro').
+  centro: ["recetas", "produccion", "inventario", "movimientos", "lotes", "contabilidad", "cuadres"],
   rrhh: ["empleados", "asistencia", "nomina"],
   // Roles del negocio "remesas" (modelo por membresía, migración 0022). Todos
   // entran al módulo remesas; el alcance fino (qué remesas ve/opera cada uno) lo
@@ -164,9 +190,11 @@ export function landingPathForRoles(roles: string[]): string {
 /** Etiqueta legible de cada rol (para la UI de usuarios). */
 export const ROLE_LABEL: Record<RoleId, string> = {
   admin: "Administrador",
+  gerente: "Gerente de la mipyme",
   almacenero: "Almacenero",
   vendedor: "Vendedor",
   contador: "Contador",
+  centro: "Operador del centro",
   rrhh: "Recursos Humanos",
   mensajero: "Mensajero",
   gestor: "Gestor",

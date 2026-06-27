@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, businessScope } from "@/lib/auth";
 import { listBusinessesLite } from "@/lib/businesses";
 import { capitalSnapshot, listCashMovements, listFixedAssets } from "@/lib/capital";
 import { Button } from "@/components/ui/button";
@@ -21,10 +21,18 @@ const fmt = (n: number) =>
 export default async function CapitalPage({ searchParams }: { searchParams: SP }) {
   const user = await requirePermission("capital");
   const sp = await searchParams;
-  const businesses = await listBusinessesLite();
-  const business = sp.business || businesses.find((b) => b.slug === "mipyme")?.slug || businesses[0]?.slug || "";
+  // Alcance por negocio: el admin ve todos; el resto, solo sus negocios asignados.
+  const scope = businessScope(user);
+  const allBiz = await listBusinessesLite();
+  const businesses = scope ? allBiz.filter((b) => scope.includes(b.slug)) : allBiz;
+  const business =
+    (sp.business && businesses.some((b) => b.slug === sp.business) ? sp.business : null) ||
+    businesses.find((b) => b.slug === "mipyme")?.slug ||
+    businesses[0]?.slug ||
+    "";
   const isAdmin = user.roles.includes("admin");
-  const canRecord = isAdmin || user.roles.includes("contador");
+  const canManage = isAdmin || user.roles.includes("gerente");
+  const canRecord = canManage || user.roles.includes("contador");
   const [snapshot, assets, cashMovements] = await Promise.all([
     capitalSnapshot(business),
     listFixedAssets(business),
@@ -254,7 +262,7 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
       )}
 
       {/* Traspaso de capital al centro de elaboración */}
-      {isAdmin && (
+      {canManage &&(
         <Card>
           <CardContent className="pt-6 space-y-4">
             <div>
@@ -295,7 +303,7 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
       <Card>
         <CardContent className="pt-6 space-y-4">
           <div className="font-medium">Infraestructura</div>
-          {isAdmin && (
+          {canManage &&(
             <form action={addFixedAssetAction} className="flex flex-wrap items-end gap-3">
               <input type="hidden" name="business_slug" value={business} />
               <div className="space-y-1">
@@ -324,7 +332,7 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
               <Button type="submit" size="sm">Registrar inversión</Button>
             </form>
           )}
-          {isAdmin && (
+          {canManage &&(
             <p className="text-xs text-muted-foreground">
               El equivalente en USD se congela a la tasa del día (moneda rectora). Requiere una tasa vigente registrada en /remesas/tasas.
             </p>
@@ -338,13 +346,13 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
                   <th className="px-4 py-3 font-medium text-right">USD</th>
                   <th className="px-4 py-3 font-medium text-right">CUP</th>
                   <th className="px-4 py-3 font-medium">Notas</th>
-                  {isAdmin && <th className="px-4 py-3 font-medium text-right">Acciones</th>}
+                  {canManage &&<th className="px-4 py-3 font-medium text-right">Acciones</th>}
                 </tr>
               </thead>
               <tbody>
                 {assets.length === 0 && (
                   <tr>
-                    <td colSpan={isAdmin ? 6 : 5} className="px-4 py-6 text-center text-muted-foreground text-xs">
+                    <td colSpan={canManage ? 6 : 5} className="px-4 py-6 text-center text-muted-foreground text-xs">
                       Sin inversiones en infraestructura registradas.
                     </td>
                   </tr>
@@ -356,7 +364,7 @@ export default async function CapitalPage({ searchParams }: { searchParams: SP }
                     <td className="px-4 py-3 text-right font-mono">{formatUsd(a.amount_usd)}</td>
                     <td className="px-4 py-3 text-right font-mono text-muted-foreground">{fmt(a.amount)}</td>
                     <td className="px-4 py-3 text-muted-foreground">{a.notes || "—"}</td>
-                    {isAdmin && (
+                    {canManage &&(
                       <td className="px-4 py-3 text-right">
                         <form action={deleteFixedAssetAction.bind(null, a.id, business)} className="inline">
                           <Button type="submit" variant="destructive" size="sm">Eliminar</Button>

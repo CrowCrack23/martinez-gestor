@@ -260,6 +260,7 @@ export type Database = {
           user_id: string | null;
           notes: string;
           operation_date: string;
+          freight_usd: number;
           created_at: string;
         };
         Insert: {
@@ -272,6 +273,7 @@ export type Database = {
           user_id?: string | null;
           notes?: string;
           operation_date?: string;
+          freight_usd?: number;
         };
         Update: never;
         Relationships: [];
@@ -318,6 +320,7 @@ export type Database = {
           total_amount: number;
           rate: number | null;
           total_usd: number | null;
+          freight_usd: number;
           created_by: string | null;
           received_by: string | null;
           received_at: string | null;
@@ -338,6 +341,7 @@ export type Database = {
           payment_currency?: "CUP" | "USD";
           rate?: number | null;
           total_usd?: number | null;
+          freight_usd?: number;
           operation_date?: string;
           created_by?: string | null;
         };
@@ -351,6 +355,7 @@ export type Database = {
           payment_currency?: "CUP" | "USD";
           rate?: number | null;
           total_usd?: number | null;
+          freight_usd?: number;
           operation_date?: string;
           received_by?: string | null;
           received_at?: string | null;

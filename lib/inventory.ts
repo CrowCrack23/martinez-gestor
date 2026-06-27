@@ -109,6 +109,8 @@ export async function createMovement(input: {
   rate?: number | null;
   /** Fecha de la operación (YYYY-MM-DD). Por defecto, hoy. */
   operation_date?: string;
+  /** Gasto de transportación (USD) que se reparte al costo de las líneas de entrada. */
+  freight_usd?: number;
   lines: MovementLine[];
 }): Promise<string> {
   if (input.lines.length === 0) throw new Error("El movimiento debe tener al menos una línea.");
@@ -125,6 +127,7 @@ export async function createMovement(input: {
       user_id: input.user_id ?? null,
       notes: input.notes ?? "",
       operation_date: operationDate,
+      freight_usd: input.freight_usd ?? 0,
     })
     .select("id")
     .single();
@@ -140,7 +143,32 @@ export async function createMovement(input: {
     return 0;
   };
 
-  const linesPayload = input.lines.map((l) => ({
+  // Flete: se reparte entre las líneas de ENTRADA en proporción a su valor (o por
+  // cantidad si no hay costo base) y sube el costo unitario (landed cost).
+  const round6f = (n: number) => Math.round(n * 1e6) / 1e6;
+  let effLines = input.lines;
+  const freightUsd = input.freight_usd ?? 0;
+  if (input.type === "entrada" && freightUsd > 0) {
+    const rate = input.rate ?? null;
+    const totalValue = input.lines.reduce((s, l) => s + l.quantity * usdOf(l), 0);
+    const totalQty = input.lines.reduce((s, l) => s + l.quantity, 0);
+    effLines = input.lines.map((l) => {
+      const baseUsd = usdOf(l);
+      const shareUsd =
+        totalValue > 0 ? freightUsd * ((l.quantity * baseUsd) / totalValue)
+        : totalQty > 0 ? freightUsd * (l.quantity / totalQty)
+        : 0;
+      const perUnitUsd = l.quantity > 0 ? shareUsd / l.quantity : 0;
+      const baseCup = l.unit_cost != null ? l.unit_cost : rate ? baseUsd * rate : 0;
+      return {
+        ...l,
+        unit_cost: round6f(baseCup + perUnitUsd * (rate ?? 0)),
+        unit_cost_usd: round6f(baseUsd + perUnitUsd),
+      };
+    });
+  }
+
+  const linesPayload = effLines.map((l) => ({
     movement_id: mov.id,
     product_id: l.product_id,
     quantity: l.quantity,
@@ -160,7 +188,7 @@ export async function createMovement(input: {
   // Costo real de una merma (suma del consumo FIFO) para reconocerla como gasto.
   let mermaCost = 0;
   let mermaCostUsd = 0;
-  for (const l of input.lines) {
+  for (const l of effLines) {
     if (input.type === "entrada") {
       await createLot({
         product_id: l.product_id,
