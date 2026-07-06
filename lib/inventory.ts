@@ -3,6 +3,7 @@ import { unstable_cache, revalidateTag } from "next/cache";
 import { getSupabase } from "./supabase";
 import { createLot, consumeFIFO, averageCostDual, bustCosting } from "./costing";
 import { generateMermaEntry } from "./auto-accounting";
+import { deleteEntriesByReference } from "./accounting";
 import type { InventoryMovementType } from "./supabase-types";
 
 const TAG = "inventory";
@@ -288,9 +289,104 @@ export async function createMovement(input: {
   return mov.id;
 }
 
+/** Suma `delta` (con signo) al stock de (producto, almacén), sin pasar por el trigger. */
+async function adjustStockDirect(productId: string, warehouseId: string, delta: number): Promise<void> {
+  const sb = getSupabase();
+  const { data: row } = await sb
+    .from("stock_locations")
+    .select("quantity")
+    .eq("product_id", productId)
+    .eq("warehouse_id", warehouseId)
+    .maybeSingle();
+  const current = Number(row?.quantity ?? 0);
+  const { error } = await sb
+    .from("stock_locations")
+    .update({ quantity: current + delta })
+    .eq("product_id", productId)
+    .eq("warehouse_id", warehouseId);
+  if (error) throw error;
+}
+
+/**
+ * Revierte un movimiento MANUAL de inventario ("darle para atrás"): devuelve el
+ * stock y los lotes/consumos a como estaban y borra el movimiento. Solo aplica a
+ * movimientos `reference_type='manual'` — los de compra/venta/producción se
+ * deshacen desde su documento. Es seguro solo si los lotes que creó el movimiento
+ * (entrada, destino de transferencia, ajuste positivo) siguen intactos (sin
+ * salidas); si ya se consumieron, hay que corregir con un ajuste.
+ */
+export async function reverseMovement(id: string): Promise<void> {
+  const sb = getSupabase();
+  const { data: mov, error } = await sb
+    .from("inventory_movements")
+    .select("id, type, reference_type")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!mov) throw new Error("Movimiento no encontrado.");
+  if (mov.reference_type !== "manual") {
+    throw new Error("Este movimiento pertenece a una compra, venta o producción; deshazlo desde ese documento.");
+  }
+
+  // Lotes creados por el movimiento (entrada / destino de transferencia / ajuste +).
+  const { data: lots, error: lErr } = await sb
+    .from("inventory_lots")
+    .select("id, product_id, warehouse_id, qty_received, qty_remaining")
+    .eq("movement_id", id);
+  if (lErr) throw lErr;
+  for (const lot of lots ?? []) {
+    if (Number(lot.qty_remaining) !== Number(lot.qty_received)) {
+      throw new Error("No se puede revertir: parte del stock que entró con este movimiento ya salió. Corrige con un ajuste de inventario.");
+    }
+  }
+
+  // 1. Revertir los lotes creados: quitar del stock y borrar el lote.
+  for (const lot of lots ?? []) {
+    await adjustStockDirect(lot.product_id, lot.warehouse_id, -Number(lot.qty_received));
+  }
+  const { error: dlErr } = await sb.from("inventory_lots").delete().eq("movement_id", id);
+  if (dlErr) throw dlErr;
+
+  // 2. Revertir los consumos (salida / merma / origen de transferencia / ajuste −):
+  //    devolver la cantidad a cada lote y reponer el stock.
+  const { data: cons, error: cErr } = await sb
+    .from("inventory_lot_consumptions")
+    .select("id, lot_id, product_id, warehouse_id, quantity")
+    .eq("movement_id", id);
+  if (cErr) throw cErr;
+  for (const c of cons ?? []) {
+    const { data: lot, error: gErr } = await sb
+      .from("inventory_lots")
+      .select("qty_remaining")
+      .eq("id", c.lot_id)
+      .single();
+    if (gErr) throw gErr;
+    const { error: uErr } = await sb
+      .from("inventory_lots")
+      .update({ qty_remaining: Number(lot.qty_remaining) + Number(c.quantity) })
+      .eq("id", c.lot_id);
+    if (uErr) throw uErr;
+    await adjustStockDirect(c.product_id, c.warehouse_id, Number(c.quantity));
+  }
+  const { error: dcErr } = await sb.from("inventory_lot_consumptions").delete().eq("movement_id", id);
+  if (dcErr) throw dcErr;
+
+  // 3. Si era una merma, borrar su asiento de pérdida (lo descontabiliza si hacía falta).
+  if (mov.type === "merma") {
+    await deleteEntriesByReference("merma", id);
+  }
+
+  // 4. Borrar el movimiento (cascade borra sus líneas).
+  const { error: dmErr } = await sb.from("inventory_movements").delete().eq("id", id);
+  if (dmErr) throw dmErr;
+
+  bust();
+}
+
 export type MovementSummary = {
   id: string;
   type: InventoryMovementType;
+  reference_type: string;
   warehouse_from_name: string | null;
   warehouse_to_name: string | null;
   user_name: string | null;
@@ -303,6 +399,7 @@ export type MovementSummary = {
 type MovementRawRow = {
   id: string;
   type: InventoryMovementType;
+  reference_type: string;
   notes: string;
   created_at: string;
   warehouse_from: string | null;
@@ -317,7 +414,7 @@ export const listMovements = unstable_cache(
     const { data, error } = await sb
       .from("inventory_movements")
       .select(
-        "id, type, notes, created_at, warehouse_from, warehouse_to, user_id, inventory_movement_lines(quantity)",
+        "id, type, reference_type, notes, created_at, warehouse_from, warehouse_to, user_id, inventory_movement_lines(quantity)",
       )
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -347,6 +444,7 @@ export const listMovements = unstable_cache(
       return {
         id: m.id,
         type: m.type,
+        reference_type: m.reference_type,
         warehouse_from_name: m.warehouse_from ? wMap.get(m.warehouse_from) ?? null : null,
         warehouse_to_name: m.warehouse_to ? wMap.get(m.warehouse_to) ?? null : null,
         user_name: m.user_id ? uMap.get(m.user_id) ?? null : null,

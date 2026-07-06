@@ -4,6 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/searchable-select";
 
 export type LineProduct = { id: string; name: string; store: string | null };
 export type InitialLine = { product_id: string; quantity: number; unit_cost_usd: number | null };
@@ -55,6 +56,11 @@ export function PurchaseLineEditor({
 
   const patch = (uid: number, p: Partial<Row>) =>
     setRows((cur) => cur.map((x) => (x.uid === uid ? { ...x, ...p } : x)));
+
+  const productItems = useMemo(
+    () => products.map((p) => ({ value: p.id, label: `[${p.store ?? "almacén"}] ${p.name}` })),
+    [products],
+  );
 
   const totalUsd = useMemo(
     () =>
@@ -113,17 +119,12 @@ export function PurchaseLineEditor({
                   </>
                 ) : (
                   <>
-                    <Select
+                    <SearchableSelect
                       name="product_id"
-                      required
+                      items={productItems}
                       value={r.product_id}
-                      onChange={(e) => patch(r.uid, { product_id: e.target.value })}
-                    >
-                      <option value="">— Producto —</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>[{p.store ?? "almacén"}] {p.name}</option>
-                      ))}
-                    </Select>
+                      onChange={(v) => patch(r.uid, { product_id: v })}
+                    />
                     <input type="hidden" name="new_name" value="" />
                   </>
                 )}

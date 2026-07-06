@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/searchable-select";
 import { formatPrice } from "@/lib/format";
 
 export type LineProduct = { id: string; name: string; store: string | null; price: number };
@@ -33,6 +33,15 @@ export function OrderLineEditor({
   const [rows, setRows] = useState<Row[]>(seed);
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const productItems = useMemo(
+    () =>
+      products.map((p) => ({
+        value: p.id,
+        label: `[${p.store ?? "almacén"}] ${p.name}`,
+        hint: p.price > 0 ? `${formatPrice(p.price)} USD` : "sin precio",
+      })),
+    [products],
+  );
   // Espejo de priceCupFromUsd (lib/currency.ts) — múltiplo de 5 hacia arriba.
   const priceCup = (productId: string): number | null => {
     const p = productById.get(productId);
@@ -75,21 +84,12 @@ export function OrderLineEditor({
           const p = productById.get(r.product_id);
           return (
             <div key={r.uid} className="grid grid-cols-[1fr_90px_130px_110px_auto] gap-2 items-start min-w-[560px]">
-              <Select
+              <SearchableSelect
                 name="product_id"
-                required
+                items={productItems}
                 value={r.product_id}
-                onChange={(e) =>
-                  setRows((cur) => cur.map((x) => (x.uid === r.uid ? { ...x, product_id: e.target.value } : x)))
-                }
-              >
-                <option value="">— Producto —</option>
-                {products.map((pp) => (
-                  <option key={pp.id} value={pp.id}>
-                    [{pp.store ?? "almacén"}] {pp.name} — {pp.price > 0 ? `${formatPrice(pp.price)} USD` : "sin precio"}
-                  </option>
-                ))}
-              </Select>
+                onChange={(v) => setRows((cur) => cur.map((x) => (x.uid === r.uid ? { ...x, product_id: v } : x)))}
+              />
               <Input
                 type="number" step="any" min={0} name="quantity" required
                 value={r.quantity}

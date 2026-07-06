@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Flash } from "@/components/flash";
 import { formatDateTime, formatQty } from "@/lib/format";
+import { reverseMovementAction } from "./actions";
 
 type SP = Promise<{ success?: string; error?: string }>;
 
@@ -18,7 +19,8 @@ const TYPE_BADGE: Record<string, string> = {
 };
 
 export default async function MovimientosPage({ searchParams }: { searchParams: SP }) {
-  await requirePermission("movimientos");
+  const user = await requirePermission("movimientos");
+  const isAdmin = user.roles.includes("admin");
   const [movements, sp] = await Promise.all([listMovements(200), searchParams]);
   return (
     <div className="space-y-6">
@@ -44,11 +46,12 @@ export default async function MovimientosPage({ searchParams }: { searchParams: 
               <th className="px-4 py-3 font-medium text-right">Unidades</th>
               <th className="px-4 py-3 font-medium">Usuario</th>
               <th className="px-4 py-3 font-medium">Notas</th>
+              {isAdmin && <th className="px-4 py-3 font-medium text-right">Acciones</th>}
             </tr>
           </thead>
           <tbody>
             {movements.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Aún no hay movimientos.</td></tr>
+              <tr><td colSpan={isAdmin ? 8 : 7} className="px-4 py-8 text-center text-muted-foreground">Aún no hay movimientos.</td></tr>
             )}
             {movements.map((m) => (
               <tr key={m.id} className="border-b last:border-b-0 hover:bg-muted/30">
@@ -65,6 +68,17 @@ export default async function MovimientosPage({ searchParams }: { searchParams: 
                 <td className="px-4 py-3 text-right font-mono">{formatQty(m.total_quantity)}</td>
                 <td className="px-4 py-3 text-muted-foreground text-xs">{m.user_name ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground text-xs max-w-xs truncate">{m.notes}</td>
+                {isAdmin && (
+                  <td className="px-4 py-3 text-right">
+                    {m.reference_type === "manual" ? (
+                      <form action={reverseMovementAction.bind(null, m.id)} className="inline">
+                        <Button type="submit" variant="destructive" size="sm">Revertir</Button>
+                      </form>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">auto</span>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

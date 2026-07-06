@@ -1,7 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
-import { createMovement, type MovementLine } from "@/lib/inventory";
+import { createMovement, reverseMovement, type MovementLine } from "@/lib/inventory";
 import { getRateForDate } from "@/lib/currency";
 import type { InventoryMovementType } from "@/lib/supabase-types";
 import { optionalString, requireDate, ValidationError } from "@/lib/validation";
@@ -75,4 +75,17 @@ export async function createMovementAction(formData: FormData) {
     redirect(`/inventario/movimientos/nuevo?error=${encodeURIComponent(msg)}`);
   }
   redirect("/inventario/movimientos?success=Movimiento+registrado");
+}
+
+export async function reverseMovementAction(id: string) {
+  // Revertir un movimiento es exclusivo del dueño (devuelve stock y contabilidad).
+  await requireRole(["admin"]);
+  try {
+    await reverseMovement(id);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("NEXT_REDIRECT")) throw e;
+    const msg = e instanceof Error ? e.message : "Error";
+    redirect(`/inventario/movimientos?error=${encodeURIComponent(msg)}`);
+  }
+  redirect("/inventario/movimientos?success=Movimiento+revertido");
 }

@@ -1,9 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/searchable-select";
 
 export type LineProduct = { id: string; name: string; store: string | null };
 export type InitialComp = { component_product_id: string; quantity_per_unit: number };
@@ -16,6 +16,10 @@ export function BomComponentsEditor({
     ? initial.map((c, i) => ({ uid: i + 1, component_product_id: c.component_product_id, quantity_per_unit: String(c.quantity_per_unit) }))
     : [{ uid: 1, component_product_id: "", quantity_per_unit: "1" }];
   const [rows, setRows] = useState<Row[]>(seed);
+  const productItems = useMemo(
+    () => products.map((p) => ({ value: p.id, label: `[${p.store ?? "almacén"}] ${p.name}` })),
+    [products],
+  );
 
   return (
     <div className="space-y-2">
@@ -29,11 +33,9 @@ export function BomComponentsEditor({
       <div className="space-y-2 overflow-x-auto">
         {rows.map((r, idx) => (
           <div key={r.uid} className="grid grid-cols-[1fr_140px_auto] gap-2 items-start min-w-[420px]">
-            <Select name="component_product_id" required value={r.component_product_id}
-              onChange={(e) => setRows((cur) => cur.map((x) => x.uid === r.uid ? { ...x, component_product_id: e.target.value } : x))}>
-              <option value="">— Producto —</option>
-              {products.map((p) => <option key={p.id} value={p.id}>[{p.store ?? "almacén"}] {p.name}</option>)}
-            </Select>
+            <SearchableSelect name="component_product_id" items={productItems}
+              value={r.component_product_id}
+              onChange={(v) => setRows((cur) => cur.map((x) => x.uid === r.uid ? { ...x, component_product_id: v } : x))} />
             <Input type="number" step="0.0001" min={0.0001} name="quantity_per_unit" required
               value={r.quantity_per_unit}
               onChange={(e) => setRows((cur) => cur.map((x) => x.uid === r.uid ? { ...x, quantity_per_unit: e.target.value } : x))}
