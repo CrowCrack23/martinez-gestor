@@ -138,7 +138,8 @@ que existan todas las cuentas que usa el código; resuelve "Faltan cuentas …")
 producción con precio de transferencia), **0053** (tabla `centro_closures`;
 Fase 3: cuadres propios del centro), **0054** (roles `centro` y `gerente`) y
 **0055** (`freight_usd` en compras/movimientos: gasto de transportación que se
-capitaliza al costo).
+capitaliza al costo) y **0056** (arregla `_stock_add`: rechaza dejar stock
+negativo, incluido transferir un producto que no existe en el origen).
 
 ### Centro de elaboración = negocio (Fases 1-3)
 

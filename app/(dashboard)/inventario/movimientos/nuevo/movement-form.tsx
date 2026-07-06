@@ -1,15 +1,18 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { SearchableSelect } from "@/components/searchable-select";
+import { formatQty } from "@/lib/format";
 import type { InventoryMovementType } from "@/lib/supabase-types";
 
 type Warehouse = { id: string; name: string };
 type Product = { id: string; name: string; store: string | null };
+type StockEntry = { warehouse_id: string; product_id: string; quantity: number };
 
 type Line = { id: number; product_id: string; quantity: string };
 
@@ -24,19 +27,54 @@ const TYPE_OPTIONS: { value: InventoryMovementType; label: string; help: string 
 export function MovementForm({
   warehouses,
   products,
+  stock,
   action,
 }: {
   warehouses: Warehouse[];
   products: Product[];
+  stock: StockEntry[];
   action: (formData: FormData) => void;
 }) {
   const [type, setType] = useState<InventoryMovementType>("entrada");
+  const [from, setFrom] = useState("");
   const [lines, setLines] = useState<Line[]>([{ id: 1, product_id: "", quantity: "1" }]);
 
   const needsFrom = type === "salida" || type === "merma" || type === "transferencia";
   const needsTo = type === "entrada" || type === "transferencia" || type === "ajuste";
   const allowNegative = type === "ajuste";
   const help = TYPE_OPTIONS.find((t) => t.value === type)?.help;
+
+  // Existencias del almacén origen: producto → cantidad disponible.
+  const availByWarehouse = useMemo(() => {
+    const m = new Map<string, Map<string, number>>();
+    for (const s of stock) {
+      const inner = m.get(s.warehouse_id) ?? new Map<string, number>();
+      inner.set(s.product_id, s.quantity);
+      m.set(s.warehouse_id, inner);
+    }
+    return m;
+  }, [stock]);
+
+  // En salidas/mermas/transferencias solo se puede elegir lo que hay en el origen.
+  const scopeToSource = type === "salida" || type === "merma" || type === "transferencia";
+  const productItems = useMemo(() => {
+    const avail = scopeToSource ? availByWarehouse.get(from) ?? null : null;
+    const opts = avail ? products.filter((p) => avail.has(p.id)) : products;
+    return opts.map((p) => ({
+      value: p.id,
+      label: `[${p.store ?? "almacén"}] ${p.name}`,
+      hint: avail ? `${formatQty(avail.get(p.id) ?? 0)} disp.` : undefined,
+    }));
+  }, [products, availByWarehouse, from, scopeToSource]);
+
+  // Al cambiar el origen, limpia productos elegidos que ya no estén disponibles.
+  function changeFrom(value: string) {
+    setFrom(value);
+    const inner = availByWarehouse.get(value);
+    if (scopeToSource && value) {
+      setLines((cur) => cur.map((l) => (l.product_id && !inner?.has(l.product_id) ? { ...l, product_id: "" } : l)));
+    }
+  }
 
   return (
     <form action={action} className="space-y-5">
@@ -63,7 +101,14 @@ export function MovementForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label htmlFor="warehouse_from">Origen {needsFrom && <span className="text-destructive">*</span>}</Label>
-          <Select id="warehouse_from" name="warehouse_from" disabled={!needsFrom} required={needsFrom} defaultValue="">
+          <Select
+            id="warehouse_from"
+            name="warehouse_from"
+            disabled={!needsFrom}
+            required={needsFrom}
+            value={from}
+            onChange={(e) => changeFrom(e.target.value)}
+          >
             <option value="">{needsFrom ? "— Selecciona —" : "— N/A —"}</option>
             {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
           </Select>
@@ -93,19 +138,14 @@ export function MovementForm({
           {lines.map((line, idx) => (
             <div key={line.id} className="flex gap-2 items-start">
               <div className="flex-1">
-                <Select
+                <SearchableSelect
                   name="product_id"
-                  required
+                  items={productItems}
                   value={line.product_id}
-                  onChange={(e) => setLines((cur) => cur.map((l) => (l.id === line.id ? { ...l, product_id: e.target.value } : l)))}
-                >
-                  <option value="">— Producto —</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      [{p.store ?? "almacén"}] {p.name}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(v) => setLines((cur) => cur.map((l) => (l.id === line.id ? { ...l, product_id: v } : l)))}
+                  disabled={scopeToSource && !from}
+                  placeholder={scopeToSource && !from ? "— Elige primero el origen —" : "— Producto —"}
+                />
               </div>
               <div className="w-32">
                 <Input
