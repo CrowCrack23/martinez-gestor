@@ -53,6 +53,7 @@ async function resolveNewProducts(lines: PurchaseLineInput[]): Promise<PurchaseL
       featured: false,
       is_new: false,
       online_visible: false,
+      is_insumo: false,
     });
     resolved.push({ ...l, product_id: id, new_product: undefined });
   }

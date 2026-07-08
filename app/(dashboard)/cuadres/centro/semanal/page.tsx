@@ -51,10 +51,10 @@ export default async function CuadreCentroSemanalPage({ searchParams }: { search
         <Kpi label="Ingreso (CUP)" value={formatPrice(report.totals.revenue_cup)}
              delta={pctDelta(report.totals.revenue_cup, report.prev_totals.revenue_cup)} />
         <Kpi label="Costo (CUP)" value={formatPrice(report.totals.cost_cup)} />
-        <Kpi label="Ganancia (CUP)" value={formatPrice(report.totals.profit_cup)}
+        <Kpi label="Utilidad del centro" value={formatPrice(report.totals.profit_cup)}
              delta={pctDelta(report.totals.profit_cup, report.prev_totals.profit_cup)} accent />
-        <Kpi label="Pago obreros" value={formatPrice(report.totals.worker_pay_cup)} />
-        <Kpi label="Neto (CUP)" value={formatPrice(report.totals.net_cup)}
+        <Kpi label="Ganancia de los trabajadores" value={formatPrice(report.totals.worker_pay_cup)} />
+        <Kpi label="Neto del centro (CUP)" value={formatPrice(report.totals.net_cup)}
              delta={pctDelta(report.totals.net_cup, report.prev_totals.net_cup)} accent />
       </div>
 

@@ -43,6 +43,7 @@ function parseInput(form: FormData): ProductInput {
     featured: form.get("featured") === "1",
     is_new: form.get("is_new") === "1",
     online_visible: store != null && form.get("online_visible") === "1",
+    is_insumo: form.get("is_insumo") === "1",
   };
 }
 

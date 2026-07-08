@@ -84,6 +84,7 @@ export type Database = {
           featured: boolean;
           is_new: boolean;
           online_visible: boolean;
+          is_insumo: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -101,6 +102,7 @@ export type Database = {
           featured?: boolean;
           is_new?: boolean;
           online_visible?: boolean;
+          is_insumo?: boolean;
         };
         Update: {
           name?: string;
@@ -115,6 +117,7 @@ export type Database = {
           featured?: boolean;
           is_new?: boolean;
           online_visible?: boolean;
+          is_insumo?: boolean;
         };
         Relationships: [];
       };

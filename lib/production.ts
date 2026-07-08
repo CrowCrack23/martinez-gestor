@@ -232,9 +232,15 @@ export async function produceOrder(id: string, userId: string): Promise<void> {
   // paga al centro. Si no, comportamiento clásico: entra al mismo almacén a costo.
   const { data: wh } = await sb.from("warehouses").select("store_slug").eq("id", po.warehouse_id).maybeSingle();
   const isCentro = wh?.store_slug === BUSINESS_CENTRO;
+  // Clasificación del producto producido: los INSUMOS se quedan en el almacén del
+  // centro a COSTO (sin margen); solo el PRODUCTO TERMINADO pasa al almacén central
+  // con el precio de transferencia (costo + 33% de utilidad).
+  const { data: prodInfo } = await sb.from("products").select("price, is_insumo").eq("id", bom.product_id).maybeSingle();
+  const isInsumo = !!prodInfo?.is_insumo;
+  const doHandoff = isCentro && !isInsumo;
 
   let movIn: string;
-  if (isCentro) {
+  if (doHandoff) {
     const { data: central, error: cErr } = await sb
       .from("warehouses")
       .select("id")
@@ -246,9 +252,7 @@ export async function produceOrder(id: string, userId: string): Promise<void> {
     if (!central) throw new Error("No hay un almacén central configurado para recibir la producción del centro.");
 
     // Precio de catálogo del terminado (USD) para calcular la utilidad.
-    const { data: prod, error: pErr } = await sb.from("products").select("price").eq("id", bom.product_id).maybeSingle();
-    if (pErr) throw pErr;
-    const priceUsd = prod?.price != null ? Number(prod.price) : 0;
+    const priceUsd = prodInfo?.price != null ? Number(prodInfo.price) : 0;
     if (priceUsd <= 0) {
       throw new Error(`El producto terminado "${po.finished_product_name}" no tiene precio USD; ponlo en /productos antes de producir en el centro.`);
     }

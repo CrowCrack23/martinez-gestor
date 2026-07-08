@@ -138,16 +138,20 @@ que existan todas las cuentas que usa el código; resuelve "Faltan cuentas …")
 producción con precio de transferencia), **0053** (tabla `centro_closures`;
 Fase 3: cuadres propios del centro), **0054** (roles `centro` y `gerente`) y
 **0055** (`freight_usd` en compras/movimientos: gasto de transportación que se
-capitaliza al costo) y **0056** (arregla `_stock_add`: rechaza dejar stock
-negativo, incluido transferir un producto que no existe en el origen).
+capitaliza al costo), **0056** (arregla `_stock_add`: rechaza dejar stock
+negativo, incluido transferir un producto que no existe en el origen) y **0057**
+(`products.is_insumo`: clasifica insumo vs producto terminado).
 
 ### Centro de elaboración = negocio (Fases 1-3)
 
 El centro es el negocio `centro` (migración 0051; almacenes `centro_elaboracion`
 cuelgan de él). `transferCapitalToCentro` (capital.ts) lo funda con capital de la
 mipyme. En `produceOrder` (production.ts), si el almacén de la orden es del centro,
-el terminado pasa al **almacén central** a precio de transferencia **T = costo +
-33%·utilidad** (utilidad = `products.price` USD − costo); `generateCentroHandoffEntries`
+y el producto es **terminado** (`products.is_insumo=false`), el terminado pasa al
+**almacén central** a precio de transferencia **T = costo + 33%·utilidad**
+(utilidad = `products.price` USD − costo); si el producto es **insumo**
+(`is_insumo=true`) se queda en el almacén del centro a costo (sin margen, sin
+handoff). `generateCentroHandoffEntries`
 (auto-accounting.ts) genera los asientos: el centro vende (Caja/Ventas producción
 4400 + Costo/Inventario) y la mipyme compra (Inventario/Caja). Fase 3: el centro
 tiene cuadres propios (`/cuadres/centro`, lib `centro-closures.ts`, tabla

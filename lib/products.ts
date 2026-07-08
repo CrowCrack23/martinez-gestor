@@ -35,6 +35,8 @@ export type ProductRow = {
   featured: boolean;
   is_new: boolean;
   online_visible: boolean;
+  /** true = insumo/materia prima; false = producto terminado (default). */
+  is_insumo: boolean;
 };
 
 type PriceRow = { currency: string; price: number };
@@ -51,7 +53,7 @@ export const listCatalog = unstable_cache(
     const sb = getSupabase();
     let q = sb
       .from("products")
-      .select("id,name,description,price,old_price,image,category,store,shipping_time,featured,is_new,online_visible,product_prices(currency,price)")
+      .select("id,name,description,price,old_price,image,category,store,shipping_time,featured,is_new,online_visible,is_insumo,product_prices(currency,price)")
       .order("name");
     if (filter?.store) q = q.eq("store", filter.store);
     // Los productos sin tienda (solo almacén) son visibles para cualquier scope.
@@ -104,6 +106,8 @@ export type ProductInput = {
   featured: boolean;
   is_new: boolean;
   online_visible: boolean;
+  /** true = insumo/materia prima; false = producto terminado (default). */
+  is_insumo: boolean;
 };
 
 /**
@@ -150,6 +154,7 @@ export async function createCatalogProduct(input: ProductInput): Promise<string>
     shipping_time: input.shipping_time,
     featured: input.featured,
     is_new: input.is_new,
+    is_insumo: input.is_insumo,
     // Un producto sin tienda nunca se muestra en la tienda online.
     online_visible: input.store == null ? false : input.online_visible,
   });
@@ -174,6 +179,7 @@ export async function updateCatalogProduct(id: string, input: ProductInput): Pro
       shipping_time: input.shipping_time,
       featured: input.featured,
       is_new: input.is_new,
+      is_insumo: input.is_insumo,
       // Un producto sin tienda nunca se muestra en la tienda online.
       online_visible: input.store == null ? false : input.online_visible,
     })

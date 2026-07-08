@@ -22,6 +22,7 @@ export type ProductFormInitial = {
   featured: boolean;
   is_new: boolean;
   online_visible: boolean;
+  is_insumo: boolean;
 };
 
 export function ProductForm({
@@ -138,7 +139,15 @@ export function ProductForm({
           <input type="checkbox" name="is_new" value="1" defaultChecked={initial?.is_new ?? false} className="size-4" />
           Nuevo
         </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="is_insumo" value="1" defaultChecked={initial?.is_insumo ?? false} className="size-4" />
+          Es insumo (materia prima)
+        </label>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Marca <strong>Es insumo</strong> para materias primas/intermedios: si el centro los produce, se quedan en el
+        almacén del centro a costo (sin margen). Los productos terminados pasan al almacén central con el margen del centro.
+      </p>
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="submit">{submitLabel}</Button>

@@ -55,8 +55,8 @@ export default async function CuadreCentroPage({ searchParams }: { searchParams:
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <Kpi label="Ingreso del centro" value={formatPrice(preview.revenue_cup)} />
         <Kpi label="Costo de insumos" value={formatPrice(preview.cost_cup)} />
-        <Kpi label="Ganancia (CUP)" value={formatPrice(preview.profit_cup)} accent />
-        <Kpi label={`Pago obreros (${preview.worker_pct} %)`} value={formatPrice(preview.worker_pay_cup)} />
+        <Kpi label="Utilidad del centro" value={formatPrice(preview.profit_cup)} accent />
+        <Kpi label={`Ganancia de los trabajadores (${preview.worker_pct} %)`} value={formatPrice(preview.worker_pay_cup)} />
         <Kpi label="Neto del día (CUP)" value={formatPrice(preview.net_cup)} accent />
       </div>
 
