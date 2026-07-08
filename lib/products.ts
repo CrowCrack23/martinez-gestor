@@ -76,7 +76,7 @@ export async function getCatalogProduct(id: string): Promise<ProductRow | null> 
   const sb = getSupabase();
   const { data, error } = await sb
     .from("products")
-    .select("id,name,description,price,old_price,image,category,store,shipping_time,featured,is_new,online_visible,product_prices(currency,price)")
+    .select("id,name,description,price,old_price,image,category,store,shipping_time,featured,is_new,online_visible,is_insumo,product_prices(currency,price)")
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
